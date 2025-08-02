@@ -4,6 +4,7 @@ from scipy.optimize import minimize_scalar
 
 
 class Hilbert2D:
+
     def __init__(self, precision: int):
         self.precision = precision
 
@@ -77,13 +78,68 @@ class Hilbert2D:
     def F(self, t):
         x, y = self.hilbert_point(t)
         return self.f(x, y)
-
+   
+    # --- Zabudovana python metoda pro hledani minima ---
+   
     def find_minimum(self):
         result = minimize_scalar(lambda t: self.F(t), bounds=(0, 1), method='bounded')
         t_min = result.x
         h_min = self.hilbert_point(t_min)
         f_min = self.f(*h_min)
         return t_min, h_min, f_min
+   
+    # --- Optimalizacni algoritmus pro hledani minima ---
+    def Holder_algorithm(self,H,r,eps,max_iter):
+        N = 2                      
+        # STEP 0: inicializace
+        xk = [0.0, 1.0]
+        zk = [self.F(0.0), self.F(1.0)]
+        k = 2
+
+        for iteracni_krok in range(max_iter):
+            
+            # STEP 1: serazeni bodu podle hodnoty
+
+            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
+
+            # STEP 2: odhad Holderovy konstanty
+            hvalues = []
+            #for i in range(1, len(xk)):
+            #    diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+            #    hvalues.append(diff)
+            h_hat = max(hvalues) if hvalues else H
+            h_used = max([h_hat, 1e-8])   
+    
+            # STEP 3: vypocet pruseciku a M_i
+            Mi = []
+            yi = []
+            for i in range(1, len(xk)):
+            
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
+                yi.append(y)
+                # Vypocet M_i 
+                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+            
+            # STEP 4: vyber intervalu 
+        
+            idx = np.argmin(Mi)
+            y_star = yi[idx]
+            
+            # STEP 5: zastavovaci podminka
+            if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
+                break
+
+           
+            xk.append(y_star)
+            zk.append(self.F(y_star))
+            k += 1
+        
+        min_idx = np.argmin(zk)
+        t_min = xk[min_idx]               # parametr t na Hilbertově křivce
+        x_min, y_min = self.hilbert_point(t_min)  # souřadnice v R^2
+        f_min = self.f(x_min, y_min)      # hodnota funkce f(x,y)
+
+        return t_min, f_min, x_min, y_min
 
 
 class Hilbert3D:
