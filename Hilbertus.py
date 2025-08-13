@@ -80,11 +80,17 @@ class Hilbert2D:
         
 
         soucin = np.eye(2)
+       
         for j in (q_num[:-1]):
             
             soucin = soucin @ H[j]
+       
+        prvniScitanec = (1/2) * soucin @ F[q_num[-1]]
+
+
 
         s = np.zeros((2, 1))
+        
         for i in range(1, len(q_num)):
             s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
                 np.sign(q_num[i-1]) *
@@ -93,10 +99,14 @@ class Hilbert2D:
             )    
        
         s=s.flatten()
-        d=(((1/2) * soucin) @ F[q_num[-1]]) + s
+       
+        d= prvniScitanec + s
+        
+        print(prvniScitanec)
+        print(s)
         print(d)
 
-        return  (1/2) * soucin @ F[q_num[-1]] + s
+        return  d
 
         
 
