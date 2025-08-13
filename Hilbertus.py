@@ -85,7 +85,7 @@ class Hilbert2D:
             
             soucin = soucin @ H[j]
        
-        prvniScitanec = (1/2) * soucin @ F[q_num[-1]]
+        prvniScitanec = (1/2**len(q_num)) * soucin @ F[q_num[-1]]
 
 
 
