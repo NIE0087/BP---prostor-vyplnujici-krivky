@@ -55,6 +55,7 @@ class Hilbert2D:
             )
         return s
     
+   #mainstreamova podoba hilbertovy krivky 
     def calculate_nicer_point(self, e0j_counted, dj_counted, q_num):
         H0 = np.array([[0, 1],
                [1, 0]])
@@ -150,7 +151,7 @@ class Hilbert2D:
         plt.axis('equal')
         plt.show()
 
-
+    #graf pro mainstreamovou podobu
     def plot_nicer_hilbert_polygon(self, n):
         
 
