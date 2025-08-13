@@ -13,7 +13,7 @@ class Hilbert2D:
     def dec_to_quarter(self, number: float):
         q_num = []
         i = 0
-        if 0 < number <= 1:
+        if 0 < number < 1:
             while number != 0 and i < self.precision:
                 number *= 4
                 digit = math.floor(number)
@@ -54,6 +54,50 @@ class Hilbert2D:
                           [1-dj_counted[i-1]*q_num[i-1]]])
             )
         return s
+    
+    def calculate_nicer_point(self, e0j_counted, dj_counted, q_num):
+        H0 = np.array([[0, 1],
+               [1, 0]])
+
+        H1 = np.array([[1, 0],
+               [0, 1]])
+
+        H2 = np.array([[1, 0],
+               [0, 1]])
+
+        H3 = np.array([[0, -1],
+               [-1, 0]])
+
+        H = [H0, H1, H2, H3]
+
+        F0 = np.array([1/4, 1/4])
+        F1 = np.array([1/4, 3/4])
+        F2 = np.array([3/4, 3/4])
+        F3 = np.array([3/4, 1/4])
+
+        F = [F0, F1, F2, F3]
+        
+
+        soucin = np.eye(2)
+        for j in (q_num[:-1]):
+            
+            soucin = soucin @ H[j]
+
+        s = np.zeros((2, 1))
+        for i in range(1, len(q_num)):
+            s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
+                np.sign(q_num[i-1]) *
+                np.array([[(1-dj_counted[i-1])*q_num[i-1]-1],
+                          [1-dj_counted[i-1]*q_num[i-1]]])
+            )    
+       
+        s=s.flatten()
+        d=(((1/2) * soucin) @ F[q_num[-1]]) + s
+        print(d)
+
+        return  (1/2) * soucin @ F[q_num[-1]] + s
+
+        
 
     def hilbert_point(self, t):
         if t == 1.0:
@@ -63,6 +107,17 @@ class Hilbert2D:
         e0, dj = self.ej_and_dj_counter(q)
         point = self.calculate_point(e0, dj, q)
         return point.flatten()
+    
+
+    def nicer_hilbert_point(self, t):
+        if t == 1.0:
+            return np.array([1.0, 0.0]) 
+        
+        q = self.dec_to_quarter(t)
+        e0, dj = self.ej_and_dj_counter(q)
+        point = self.calculate_nicer_point(e0, dj, q)
+        return point.flatten()
+
     
     def hilbert_polygon_point(self, t, n):
     
@@ -94,6 +149,24 @@ class Hilbert2D:
         plt.plot(points[:,0], points[:,1], '-o', markersize=2)
         plt.axis('equal')
         plt.show()
+
+
+    def plot_nicer_hilbert_polygon(self, n):
+        
+
+        points = []
+        for k in range(4 ** n):
+            t = k / (4 ** n)
+            p = self.nicer_hilbert_point(t)
+            points.append(p)
+
+        points = np.array(points)
+        plt.plot(points[:, 0], points[:, 1], '-o', markersize=2)
+        plt.axis('equal')
+        plt.show()
+
+
+
 
 
 
@@ -191,7 +264,6 @@ class Hilbert3D:
         
         elif number == 1.0:
             q_num.append(1)
-
         return q_num
     
     
@@ -219,35 +291,29 @@ class Hilbert3D:
         ]
 
         soucin = np.eye(3)
-        s = h_all[q_num[0]] * 0.5
+        s = 0.5 * h_all[q_num[0]]
 
         for j in range(1, len(q_num)):
-            for k in range(j):
-                soucin = soucin @ H_all[q_num[k]]
+            
+            soucin = soucin @ H_all[q_num[j-1]]
             s += (1/(2**(j+1))) * (soucin @ h_all[q_num[j]])
-            soucin = np.eye(3)
+            
 
         return s
     
-    def hilbert3D_point(self, t):
-
-        q = self.dec_to_octal(t)
-        point = self.ThreeD_Hilbert(q)
-        return point
 
 
-    def plot_3d_hilbert(self, order=2, num_points=2000):
-        t_values = np.linspace(0, 1, num_points)
-        points = []
-        for t in t_values:
-            pt = self.hilbert3D_point(t)
-            points.append(pt)
-        points = np.array(points)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.plot(points[:,0], points[:,1], points[:,2], lw=1)
-        ax.set_title(f'3D Hilbert Curve (order={order})')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
+    def plot_hilbert_curve(self,n):
+        samples = 8**n
+        pts = np.zeros((samples, 3))
+
+        for k in range(samples):
+            t= k/samples
+            q = self.dec_to_octal(t)  
+            pts[k] = self.ThreeD_Hilbert(q)  
+
+        fig = plt.figure(figsize=(6,6))
+        ax = fig.add_subplot(projection='3d')
+        ax.plot(pts[:,0], pts[:,1], pts[:,2], color='purple', linewidth=0.5) 
+        ax.set_box_aspect([1,1,1])
         plt.show()
