@@ -14,17 +14,17 @@ class Hilbert2D:
         q_num = []
         i = 0
         if 0 < number < 1:
-            while number != 0 and i < self.precision:
+            while  i < self.precision:
                 number *= 4
                 digit = math.floor(number)
                 q_num.append(digit)
                 number -= digit
                 i += 1
-        elif number == 0:
-            q_num.append(0)
+        elif number == 0.0:
+            q_num = [0] * self.precision
         
         elif number == 1.0:
-            q_num.append(1)
+            q_num =[1] + [0] * self.precision
         
         return q_num
 
@@ -55,8 +55,7 @@ class Hilbert2D:
             )
         return s
     
-   #mainstreamova podoba hilbertovy krivky 
-    def calculate_nicer_point(self, e0j_counted, dj_counted, q_num):
+    def calculate_nicer_point(self, e0j_counted, dj_counted, q_num,n):
         H0 = np.array([[0, 1],
                [1, 0]])
 
@@ -71,40 +70,36 @@ class Hilbert2D:
 
         H = [H0, H1, H2, H3]
 
-        F0 = np.array([1/4, 1/4])
-        F1 = np.array([1/4, 3/4])
-        F2 = np.array([3/4, 3/4])
-        F3 = np.array([3/4, 1/4])
+        F0 = np.array([1/2, 1/2])@ H[0]
+        F1 = np.array([1/2, 1/2])@ H[1]
+        F2 = np.array([1/2, 1/2])@ H[2]
+        F3 = np.array([1/2, 1/2])@ H[3]
 
         F = [F0, F1, F2, F3]
-        
-
         soucin = np.eye(2)
-       
+        
+        q_middle = q_num
+        
+        
         for j in (q_num[:-1]):
             
             soucin = soucin @ H[j]
        
-        prvniScitanec = (1/2**len(q_num)) * soucin @ F[q_num[-1]]
-
-
-
+        prvniScitanec = (1/2)**(n) * soucin @ F[q_num[-1]]
+      
         s = np.zeros((2, 1))
-        
-        for i in range(1, len(q_num)):
+        for i in range(1, len(q_num) + 1):
             s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
                 np.sign(q_num[i-1]) *
                 np.array([[(1-dj_counted[i-1])*q_num[i-1]-1],
                           [1-dj_counted[i-1]*q_num[i-1]]])
-            )    
+            )  
        
         s=s.flatten()
        
-        d= prvniScitanec + s
+        d= s +prvniScitanec
         
-        print(prvniScitanec)
-        print(s)
-        print(d)
+    
 
         return  d
 
@@ -120,13 +115,12 @@ class Hilbert2D:
         return point.flatten()
     
 
-    def nicer_hilbert_point(self, t):
-        if t == 1.0:
-            return np.array([1.0, 0.0]) 
+    def nicer_hilbert_point(self, t, n):
+        
         
         q = self.dec_to_quarter(t)
         e0, dj = self.ej_and_dj_counter(q)
-        point = self.calculate_nicer_point(e0, dj, q)
+        point = self.calculate_nicer_point(e0, dj, q, n)
         return point.flatten()
 
     
@@ -168,16 +162,13 @@ class Hilbert2D:
         points = []
         for k in range(4 ** n):
             t = k / (4 ** n)
-            p = self.nicer_hilbert_point(t)
+            p = self.nicer_hilbert_point(t,n)
             points.append(p)
 
         points = np.array(points)
         plt.plot(points[:, 0], points[:, 1], '-o', markersize=2)
         plt.axis('equal')
         plt.show()
-
-
-
 
 
 
