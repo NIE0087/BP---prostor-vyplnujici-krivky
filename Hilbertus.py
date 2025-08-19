@@ -3,6 +3,7 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as patches
 
 class Hilbert2D:
 
@@ -155,7 +156,7 @@ class Hilbert2D:
         plt.axis('equal')
         plt.show()
 
-    #graf pro mainstreamovou podobu
+    # --- graf pro mainstreamovou podobu ---
     def plot_nicer_hilbert_polygon(self, n):
         
 
@@ -170,8 +171,48 @@ class Hilbert2D:
         plt.axis('equal')
         plt.show()
 
+    def plot_multiple_hilberts(self, orders):
+        
+            fig, axes = plt.subplots(1, len(orders), figsize=(4*len(orders), 4))
 
+            if len(orders) == 1:
+                axes = [axes]
 
+            for ax, n in zip(axes, orders):
+       
+                points = []
+                for k in range(4 ** n):
+                 t = k / (4 ** n)
+                 p = self.nicer_hilbert_point(t, n)
+                 points.append(p)
+                points = np.array(points)
+
+       
+                ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
+                ax.set_aspect("equal")
+                ax.set_title(f"n = {n}")
+                ax.axis("on")
+
+       
+                step = 1 / (2**n)   
+                for i in range(2**n+1):
+                    for j in range(2**n+1):
+                       square = patches.Rectangle(
+                            (i*step, j*step), step, step,
+                            facecolor="white",   
+                            edgecolor="black",      
+                            linewidth=0.5
+                        )
+                       ax.add_patch(square)
+                    ax.set_xlim(0, 1)
+                    ax.set_ylim(0, 1)
+                    ax.set_aspect("equal")
+                    ax.set_title(f"n = {n}")
+                    ax.axis("on")
+  
+            
+            plt.tight_layout()
+            plt.show()
 
     # --- Optimalizace ---
     @staticmethod
