@@ -10,6 +10,8 @@ class Hilbert2D:
     def __init__(self, precision: int):
         self.precision = precision
 
+    
+    
     # --- Konverze ---
     def dec_to_quarter(self, number: float):
         q_num = []
@@ -28,8 +30,12 @@ class Hilbert2D:
             q_num =[1] + [0] * self.precision
         
         return q_num
+    
 
-    # --- Hilbert 2D ---
+
+
+
+    # --- Hilbert 2D vzorec ---
     def ej_and_dj_counter(self, q_num):
         e0j_counted = np.zeros(len(q_num))
         e3j_counted = np.zeros(len(q_num))
@@ -56,7 +62,18 @@ class Hilbert2D:
             )
         return s
     
-    def calculate_nicer_point(self, e0j_counted, dj_counted, q_num,n):
+    def hilbert_point(self, t):
+        if t == 1.0:
+            return np.array([1.0, 0.0]) 
+        
+        q = self.dec_to_quarter(t)
+        e0, dj = self.ej_and_dj_counter(q)
+        point = self.calculate_point(e0, dj, q)
+        return point.flatten()
+    
+    # --- Mainstreamova verze ---
+
+    def calculate_mainstream_point(self, e0j_counted, dj_counted, q_num,n):
         H0 = np.array([[0, 1],
                [1, 0]])
 
@@ -96,34 +113,25 @@ class Hilbert2D:
                           [1-dj_counted[i-1]*q_num[i-1]]])
             )  
        
-        s=s.flatten()
+        s = s.flatten()
        
-        d= s +prvniScitanec
+        d = s + prvniScitanec
         
     
 
         return  d
 
-        
-
-    def hilbert_point(self, t):
-        if t == 1.0:
-            return np.array([1.0, 0.0]) 
-        
-        q = self.dec_to_quarter(t)
-        e0, dj = self.ej_and_dj_counter(q)
-        point = self.calculate_point(e0, dj, q)
-        return point.flatten()
     
 
-    def nicer_hilbert_point(self, t, n):
+    def mainstream_hilbert_point(self, t, n):
         
         
         q = self.dec_to_quarter(t)
         e0, dj = self.ej_and_dj_counter(q)
-        point = self.calculate_nicer_point(e0, dj, q, n)
+        point = self.calculate_mainstream_point(e0, dj, q, n)
         return point.flatten()
 
+    # --- PLOTS ---
     
     def hilbert_polygon_point(self, t, n):
     
@@ -157,13 +165,13 @@ class Hilbert2D:
         plt.show()
 
     # --- graf pro mainstreamovou podobu ---
-    def plot_nicer_hilbert_polygon(self, n):
+    def plot_mainstream_hilbert_polygon(self, n):
         
 
         points = []
         for k in range(4 ** n):
             t = k / (4 ** n)
-            p = self.nicer_hilbert_point(t,n)
+            p = self.mainstream_hilbert_point(t,n)
             points.append(p)
 
         points = np.array(points)
@@ -183,7 +191,7 @@ class Hilbert2D:
                 points = []
                 for k in range(4 ** n):
                  t = k / (4 ** n)
-                 p = self.nicer_hilbert_point(t, n)
+                 p = self.mainstream_hilbert_point(t, n)
                  points.append(p)
                 points = np.array(points)
 
@@ -213,6 +221,73 @@ class Hilbert2D:
             
             plt.tight_layout()
             plt.show()
+
+    def plot_multiple_hilberts_arrows(self, orders):
+
+     fig, axes = plt.subplots(1, len(orders), figsize=(4*len(orders), 4))
+
+     if len(orders) == 1:
+        axes = [axes]
+
+     for ax, n in zip(axes, orders):
+        
+        if n == 0:
+            # ---- n=0, jen úsečka
+            points = np.array([[0,0], [1,0]])
+
+        elif n == 1:
+            # ---- n=1, ručně zadaná Hilbertova křivka
+            points = np.array([
+                [0.0, 0.0],
+                [0.0, 0.5],
+                [0.5, 0.5],
+                [1.0, 0.5],
+                [1.0, 0.0],
+                
+                
+            ])
+
+        else:
+            # ---- ostatní řády podle generátoru
+            points = []
+            for k in range(4 ** n+1):
+                t = k / (4 ** n)
+                p = self.hilbert_polygon_point(t, n)
+                points.append(p)
+            points = np.array(points)
+
+        # vykreslit body + čáru
+        ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
+
+        # přidat šipky
+        for i in range(len(points)-1):
+            x0, y0 = points[i]
+            x1, y1 = points[i+1]
+            ax.annotate("",
+                        xy=(x1, y1), xytext=(x0, y0),
+                        arrowprops=dict(arrowstyle="->", color="black", lw=2))
+
+        # mřížka
+        step = 1 / (2**max(1,n))   # aby to fungovalo i pro n=0
+        for i in range(2**max(1,n)+1):
+            for j in range(2**max(1,n)+1):
+                square = patches.Rectangle(
+                    (i*step, j*step), step, step,
+                    facecolor="white",
+                    edgecolor="black",
+                    linewidth=0.5
+                )
+                ax.add_patch(square)
+
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_aspect("equal")
+        ax.set_title(f"n = {n}")
+        ax.axis("on")
+
+     plt.tight_layout()
+     plt.show()
+
 
     # --- Optimalizace ---
     @staticmethod
@@ -285,78 +360,3 @@ class Hilbert2D:
 
         return t_min, f_min, x_min, y_min
 
-
-class Hilbert3D:
-    
-    def __init__(self, precision: int):
-        self.precision = precision
-
-    def dec_to_octal(self, number: float):
-        q_num = []
-        i = 0
-
-        if 0 < number < 1:
-            while number != 0 and i < self.precision:
-                number *= 8
-                digit = math.floor(number)
-                q_num.append(digit)
-                number -= digit
-                i += 1
-        elif number == 0:
-            q_num.append(0)
-        
-        elif number == 1.0:
-            q_num.append(1)
-        return q_num
-    
-    
-    def ThreeD_Hilbert(self, q_num):
-        H_all = [
-            np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
-            np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]]),
-            np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
-            np.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]]),
-            np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]]),
-            np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
-            np.array([[0, 0, -1], [0, 1, 0], [-1, 0, 0]]),
-            np.array([[1, 0, 0], [0, 0, -1], [0, -1, 0]])
-        ]
-
-        h_all = [
-            np.array([0, 0, 0]),
-            np.array([0, 1, 0]),
-            np.array([1, 1, 0]),
-            np.array([1, 1, 1]),
-            np.array([2, 1, 1]),
-            np.array([1, 1, 1]),
-            np.array([1, 1, 2]),
-            np.array([0, 1, 2])
-        ]
-
-        soucin = np.eye(3)
-        s = 0.5 * h_all[q_num[0]]
-
-        for j in range(1, len(q_num)):
-            
-            soucin = soucin @ H_all[q_num[j-1]]
-            s += (1/(2**(j+1))) * (soucin @ h_all[q_num[j]])
-            
-
-        return s
-    
-
-
-    def plot_hilbert_curve(self,n):
-        samples = 8**n
-        pts = np.zeros((samples, 3))
-
-        for k in range(samples):
-            t= k/samples
-            q = self.dec_to_octal(t)  
-            pts[k] = self.ThreeD_Hilbert(q)  
-
-        fig = plt.figure(figsize=(6,6))
-        ax = fig.add_subplot(projection='3d')
-        ax.plot(pts[:,0], pts[:,1], pts[:,2], color='purple', linewidth=0.5) 
-        ax.set_box_aspect([1,1,1])
-        plt.show()
