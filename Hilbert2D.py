@@ -256,6 +256,10 @@ class Hilbert2D:
                 points.append(p)
             points = np.array(points)
 
+
+
+
+
         # vykreslit body + čáru
         ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
 
@@ -282,7 +286,7 @@ class Hilbert2D:
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_aspect("equal")
-        ax.set_title(f"n = {n}")
+        ax.set_title(f"({n})")
         ax.axis("on")
 
      plt.tight_layout()
