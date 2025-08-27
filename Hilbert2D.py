@@ -144,7 +144,7 @@ class Hilbert2D:
 
         p_k = self.hilbert_point(k / N)
         p_k1 = self.hilbert_point((k + 1) / N)
-        
+  
         point = N * (t-(k/N))*p_k1 - N*(t-((k+1)/N))*p_k
 
         return point
