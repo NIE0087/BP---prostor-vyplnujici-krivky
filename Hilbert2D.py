@@ -232,23 +232,22 @@ class Hilbert2D:
      for ax, n in zip(axes, orders):
         
         if n == 0:
-            # ---- n=0, jen úsečka
+           
             points = np.array([[0,0], [1,0]])
 
         elif n == 1:
-            # ---- n=1, ručně zadaná Hilbertova křivka
+           
             points = np.array([
                 [0.0, 0.0],
                 [0.0, 0.5],
                 [0.5, 0.5],
                 [1.0, 0.5],
-                [1.0, 0.0],
-                
+                [1.0, 0.0]   
                 
             ])
 
         else:
-            # ---- ostatní řády podle generátoru
+            
             points = []
             for k in range(4 ** n+1):
                 t = k / (4 ** n)
@@ -257,13 +256,9 @@ class Hilbert2D:
             points = np.array(points)
 
 
-
-
-
-        # vykreslit body + čáru
         ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
 
-        # přidat šipky
+        #  šipky
         for i in range(len(points)-1):
             x0, y0 = points[i]
             x1, y1 = points[i+1]
@@ -272,7 +267,7 @@ class Hilbert2D:
                         arrowprops=dict(arrowstyle="->", color="black", lw=2))
 
         # mřížka
-        step = 1 / (2**max(1,n))   # aby to fungovalo i pro n=0
+        step = 1 / (2**max(1,n))   
         for i in range(2**max(1,n)+1):
             for j in range(2**max(1,n)+1):
                 square = patches.Rectangle(
@@ -293,30 +288,61 @@ class Hilbert2D:
      plt.show()
 
 
+
+
+
     # --- Optimalizace ---
+
+
+
+
     @staticmethod
+    # --- Random function ---
     def f(x, y):
         return ((x - 0.3)**2 + (y - 0.7)**2)**1/2 + 1
+    
+    
+    # --- Himmelblau's function --- 
+    # --- Three-hump camel function ---
+    # --- Easom function ---
+    @staticmethod
+    def f1(x, y):
+        #return (x**2 + y - 11)**2 + (y**2 + x - 7)**2
+        #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
+        return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+    
 
-    def F(self, t, n):
+    # --- Matyas function ---
+    @staticmethod
+    def f2(x, y):
+        return 0.26*(x**2 + y**2) - 0.48*y*x
+
+
+
+    def F(self, t, n, whatFunc):
         x, y = self.hilbert_polygon_point(t,n)
-        return self.f(x, y)
+        if whatFunc == 0:
+            return self.f(x, y)
+        elif whatFunc == 1:
+            return self.f1(x,y)
+        else:
+            return self.f2(x,y)
    
     # --- Zabudovana python metoda pro hledani minima ---
    
-    def find_minimum(self,n):
-        result = minimize_scalar(lambda t: self.F(t,n), bounds=(0, 1), method='bounded')
+    def find_minimum(self,n, whatFunc):
+        result = minimize_scalar(lambda t: self.F(t,n,whatFunc), bounds=(0, 1), method='bounded')
         t_min = result.x
         h_min = self.hilbert_point(t_min)
         f_min = self.f(*h_min)
         return t_min, h_min, f_min
    
     # --- Optimalizacni algoritmus pro hledani minima ---
-    def Holder_algorithm(self,H,r,eps,max_iter,n):
+    def Holder_algorithm(self,H,r,eps,max_iter,n,whatFunc):
         N = 2                      
         # STEP 0: inicializace
         xk = [0.0, 1.0]
-        zk = [self.F(0.0,n), self.F(1.0,n)]
+        zk = [self.F(0.0,n, whatFunc), self.F(1.0,n,whatFunc)]
         k = 2
 
         for iteracni_krok in range(max_iter):
@@ -354,13 +380,19 @@ class Hilbert2D:
 
            
             xk.append(y_star)
-            zk.append(self.F(y_star,n))
+            zk.append(self.F(y_star,n,whatFunc))
             k += 1
         
         min_idx = np.argmin(zk)
         t_min = xk[min_idx]               # parametr t na Hilbertově křivce
         x_min, y_min = self.hilbert_point(t_min)  # souřadnice v R^2
-        f_min = self.f(x_min, y_min)      # hodnota funkce f(x,y)
+        
+        if whatFunc==0:
+            f_min = self.f(x_min, y_min)      # hodnota funkce f(x,y)
+        elif whatFunc==1:
+            f_min = self.f1(x_min, y_min)
+        else:
+            f_min = self.f2(x_min,y_min)
 
         return t_min, f_min, x_min, y_min
 
