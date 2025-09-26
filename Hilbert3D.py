@@ -181,6 +181,53 @@ class Hilbert3D:
         ax.set_box_aspect([1,1,1])
         plt.show()
 
+    def plot_mainstream_hilbert_cubes(self, n):
+     samples = 8**n
+     ts = np.zeros((samples, 3))
+     pts = np.zeros((samples, 3))
+     for k in range(samples):
+            t = k/samples
+            q = self.dec_to_octal(t)  
+            pts[k] = self.calculate_mainstream_point(q, n)  
+
+     fig = plt.figure(figsize=(6,6))
+     ax = fig.add_subplot(projection='3d')
+     ax.grid(False)
+     ax.plot(pts[:,0], pts[:,1], pts[:,2], color='purple', linewidth=0.5) 
+     ax.set_box_aspect([1,1,1])
+
+
+    # === Přidání mřížky ===
+     divs = 2**n   # počet dělení os
+     grid = np.linspace(0, 1, divs+1)  # rozdělení 0..1
+
+    # Čáry rovnoběžné s osou x
+     for y in grid:
+        for z in grid:
+            ax.plot([0,1], [y,y], [z,z], color="black", linewidth=0.9, alpha=0.5)
+
+    # Čáry rovnoběžné s osou y
+     for x in grid:
+        for z in grid:
+            ax.plot([x,x], [0,1], [z,z], color="black", linewidth=0.9, alpha=0.5)
+
+    # Čáry rovnoběžné s osou z
+     for x in grid:
+        for y in grid:
+         ax.plot([x,x], [y,y], [0,1], color="black", linewidth=0.9, alpha=0.5)
+   
+         ax.scatter(pts[:,0], pts[:,1], pts[:,2], color="purple", s=15)
+
+     for i, (x,y,z) in enumerate(pts):
+        ax.text(x, y, z, str(i+1), color="black", fontsize=8) 
+
+     ax.view_init(elev=20)
+
+
+
+     plt.show()
+
+
 # --- Optimalizace ---
 
     @staticmethod

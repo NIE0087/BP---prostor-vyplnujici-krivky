@@ -4,6 +4,8 @@ from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as patches
+import pandas as pd
+import seaborn as sns
 
 class Hilbert2D:
 
@@ -289,6 +291,69 @@ class Hilbert2D:
 
 
 
+    def compare_algorithms(self, H, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+        """
+        Porovnání Holder algoritmu (mapped vs nemapped).
+        
+        Parameters
+        ----------
+        H : float
+            Hölder odhad (konstanta).
+        r : float
+            Parametr algoritmu.
+        eps : float
+            Přesnost.
+        max_iter : int
+            Maximální počet iterací.
+        N_vals : list[int]
+            Seznam hodnot řádu Hilbertovy křivky.
+        x_min, x_max, y_min, y_max : float
+            Hranice oblasti pro mapped algoritmus.
+        whatFunc : int
+            0 = f, 1 = f1, 2 = f2.
+        true_min : float
+            Opravdové minimum (pro porovnání).
+        """
+
+        
+        
+
+        results = []
+
+        for n in N_vals:
+            # mapped
+            t_m, f_m, xm, ym = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            diff_m = abs(f_m - true_min)
+
+            # nemapped
+            t_nm, f_nm, xnm, ynm = self.Holder_algorithm(H, r, eps, max_iter, n, whatFunc)
+            diff_nm = abs(f_nm - true_min)
+
+            results.append([n, f_m, diff_m, f_nm, diff_nm])
+
+        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota mapped", "Rozdíl mapped", "Hodnota nemapped", "Rozdíl nemapped"])
+        print(df[["Iterace n", "Rozdíl mapped", "Rozdíl nemapped"]])
+        n_arr = df["Iterace n"].to_numpy()
+        mapped_arr = df["Rozdíl mapped"].to_numpy()
+        nemapped_arr = df["Rozdíl nemapped"].to_numpy()
+        # tabulka
+        # graf přes seaborn
+        plt.figure(figsize=(8, 5))
+    # Use numpy arrays for plotting
+        n_arr = df["Iterace n"].to_numpy()
+        mapped_arr = df["Rozdíl mapped"].to_numpy()
+        nemapped_arr = df["Rozdíl nemapped"].to_numpy()
+        plt.plot(n_arr, mapped_arr, 'o-', label="Holder mapped")
+        plt.plot(n_arr, nemapped_arr, 's-', label="Holder nemapped")
+        plt.xlabel("Iterace Hilbertovy křivky (n)")
+        plt.ylabel("Rozdíl od opravdového minima")
+        plt.title("Porovnání přeškálovaného vs. nepřeškálovaného Hölder algoritmu")
+        plt.yscale("log")   # pokud chceš logaritmickou osu jako dřív
+        plt.grid(True, which="both", ls="--", lw=0.5)
+        plt.legend()
+        plt.show()
+        
+    
 
 
     # --- Optimalizace ---
@@ -307,9 +372,9 @@ class Hilbert2D:
     # --- Easom function ---
     @staticmethod
     def f1(x, y):
-        #return (x**2 + y - 11)**2 + (y**2 + x - 7)**2
+        return (x**2 + y - 11)**2 + (y**2 + x - 7)**2
         #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
-        return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+        #return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
     
 
     # --- Matyas function ---
@@ -395,4 +460,105 @@ class Hilbert2D:
             f_min = self.f2(x_min,y_min)
 
         return t_min, f_min, x_min, y_min
+
+
+
+    # --- Optimalizacni algoritmus pro hledani minima v dane oblasti ---
+
+
+    def map_to_area(self, t,n, x_min, x_max, y_min, y_max):
+        """
+        Přemapuje bod z jednotkového čtverce [0,1]x[0,1]
+        do obdélníku [x_min, x_max] x [y_min, y_max].
+        """
+        point = self.hilbert_polygon_point(t,n)
+        px, py = point
+        new_x = x_min + (x_max - x_min) * px
+        new_y = y_min + (y_max - y_min) * py
+        return np.array([new_x, new_y])
+    
+    
+    def F_mapped(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
+        x, y = self.map_to_area(t,n, x_min, x_max, y_min, y_max)
+        if whatFunc == 0:
+            return self.f(x, y)
+        elif whatFunc == 1:
+            return self.f1(x,y)
+        else:
+            return self.f2(x,y)
+    
+    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc):
+        result = minimize_scalar(lambda t: self.F_mapped(t,n, x_min, x_max, y_min, y_max, whatFunc), bounds=(0, 1), method='bounded')
+        t_min = result.x
+        h_min = self.map_to_area(t_min,n, x_min, x_max, y_min, y_max)
+        if whatFunc == 0:
+            f_min = self.f(*h_min)
+        elif whatFunc == 1:
+            f_min = self.f1(*h_min)
+        else:
+            f_min = self.f2(*h_min)
+        return t_min, h_min, f_min
+    
+
+
+    def Holder_algorithm_mapped(self,H,r,eps,max_iter,n,x_min, x_max, y_min, y_max, whatFunc):
+        N = 2                      
+        # STEP 0: inicializace
+        xk = [0.0, 1.0]
+        zk = [self.F_mapped(0.0,n, x_min, x_max, y_min, y_max, whatFunc), self.F_mapped(1.0,n, x_min, x_max, y_min, y_max, whatFunc)]
+        k = 2
+
+        for iteracni_krok in range(max_iter):
+            
+            # STEP 1: serazeni bodu podle hodnoty
+
+            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
+
+            # STEP 2: odhad Holderovy konstanty
+            hvalues = []
+            for i in range(1, len(xk)):
+               diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+               hvalues.append(diff)
+            h_hat = max(hvalues) if hvalues else H
+            h_used = max([h_hat, 1e-8])   
+    
+            # STEP 3: vypocet pruseciku a M_i
+            Mi = []
+            yi = []
+            for i in range(1, len(xk)):
+            
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
+                yi.append(y)
+                # Vypocet M_i 
+                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+            
+            # STEP 4: vyber intervalu 
+        
+            idx = np.argmin(Mi)
+            y_star = yi[idx]
+            
+            # STEP 5: zastavovaci podminka
+            if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
+                break
+
+           
+            xk.append(y_star)
+            zk.append(self.F_mapped(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
+            k += 1
+        
+        min_idx = np.argmin(zk)
+        t_min = xk[min_idx]               # parametr t na Hilbertově křivce
+        x_min_mapped, y_min_mapped = self.map_to_area(t_min, n,x_min, x_max, y_min, y_max)  # souřadnice v R^2
+        if whatFunc==0:
+            f_min = self.f(x_min_mapped, y_min_mapped)      # hodnota funkce f(x,y)
+        elif whatFunc==1:
+            f_min = self.f1(x_min_mapped, y_min_mapped)
+        else:
+            f_min = self.f2(x_min_mapped,y_min_mapped)
+        return t_min, f_min, x_min_mapped, y_min_mapped
+
+
+
+
+
 
