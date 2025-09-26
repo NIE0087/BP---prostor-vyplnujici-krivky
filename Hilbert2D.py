@@ -292,31 +292,6 @@ class Hilbert2D:
 
 
     def compare_algorithms(self, H, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
-        """
-        Porovnání Holder algoritmu (mapped vs nemapped).
-        
-        Parameters
-        ----------
-        H : float
-            Hölder odhad (konstanta).
-        r : float
-            Parametr algoritmu.
-        eps : float
-            Přesnost.
-        max_iter : int
-            Maximální počet iterací.
-        N_vals : list[int]
-            Seznam hodnot řádu Hilbertovy křivky.
-        x_min, x_max, y_min, y_max : float
-            Hranice oblasti pro mapped algoritmus.
-        whatFunc : int
-            0 = f, 1 = f1, 2 = f2.
-        true_min : float
-            Opravdové minimum (pro porovnání).
-        """
-
-        
-        
 
         results = []
 
@@ -348,7 +323,7 @@ class Hilbert2D:
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
         plt.title("Porovnání přeškálovaného vs. nepřeškálovaného Hölder algoritmu")
-        plt.yscale("log")   # pokud chceš logaritmickou osu jako dřív
+        plt.yscale("log")  
         plt.grid(True, which="both", ls="--", lw=0.5)
         plt.legend()
         plt.show()
