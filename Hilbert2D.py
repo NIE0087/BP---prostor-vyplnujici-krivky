@@ -297,32 +297,32 @@ class Hilbert2D:
 
         for n in N_vals:
             # mapped
-            t_m, f_m, xm, ym = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            _, f_m, _, _ = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
             diff_m = abs(f_m - true_min)
 
             # nemapped
-            t_nm, f_nm, xnm, ynm = self.Holder_algorithm(H, r, eps, max_iter, n, whatFunc)
+            _,_,f_nm = self.find_minimum_mapped(n, x_min, x_max, y_min, y_max, whatFunc)
             diff_nm = abs(f_nm - true_min)
 
             results.append([n, f_m, diff_m, f_nm, diff_nm])
 
-        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota mapped", "Rozdíl mapped", "Hodnota nemapped", "Rozdíl nemapped"])
-        print(df[["Iterace n", "Rozdíl mapped", "Rozdíl nemapped"]])
+            df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota alg z lib", "Rozdíl alg z lib"])
+        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl alg z lib"]])
         n_arr = df["Iterace n"].to_numpy()
-        mapped_arr = df["Rozdíl mapped"].to_numpy()
-        nemapped_arr = df["Rozdíl nemapped"].to_numpy()
+        mapped_arr = df["Rozdíl Hoelder"].to_numpy()
+        nemapped_arr = df["Rozdíl alg z lib"].to_numpy()
         # tabulka
         # graf přes seaborn
         plt.figure(figsize=(8, 5))
     # Use numpy arrays for plotting
         n_arr = df["Iterace n"].to_numpy()
-        mapped_arr = df["Rozdíl mapped"].to_numpy()
-        nemapped_arr = df["Rozdíl nemapped"].to_numpy()
-        plt.plot(n_arr, mapped_arr, 'o-', label="Holder mapped")
-        plt.plot(n_arr, nemapped_arr, 's-', label="Holder nemapped")
+        mapped_arr = df["Rozdíl Hoelder"].to_numpy()
+        nemapped_arr = df["Rozdíl alg z lib"].to_numpy()
+        plt.plot(n_arr, mapped_arr, 'o-', label="Holder")
+        plt.plot(n_arr, nemapped_arr, 's-', label="Algoritmus z knihovny")
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
-        plt.title("Porovnání přeškálovaného vs. nepřeškálovaného Hölder algoritmu")
+        plt.title("Porovnání Hölder algortimu vs. algoritmu z knihovny")
         plt.yscale("log")  
         plt.grid(True, which="both", ls="--", lw=0.5)
         plt.legend()
@@ -368,73 +368,7 @@ class Hilbert2D:
         else:
             return self.f2(x,y)
    
-    # --- Zabudovana python metoda pro hledani minima ---
    
-    def find_minimum(self,n, whatFunc):
-        result = minimize_scalar(lambda t: self.F(t,n,whatFunc), bounds=(0, 1), method='bounded')
-        t_min = result.x
-        h_min = self.hilbert_point(t_min)
-        f_min = self.f(*h_min)
-        return t_min, h_min, f_min
-   
-    # --- Optimalizacni algoritmus pro hledani minima ---
-    def Holder_algorithm(self,H,r,eps,max_iter,n,whatFunc):
-        N = 2                      
-        # STEP 0: inicializace
-        xk = [0.0, 1.0]
-        zk = [self.F(0.0,n, whatFunc), self.F(1.0,n,whatFunc)]
-        k = 2
-
-        for iteracni_krok in range(max_iter):
-            
-            # STEP 1: serazeni bodu podle hodnoty
-
-            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
-
-            # STEP 2: odhad Holderovy konstanty
-            hvalues = []
-            for i in range(1, len(xk)):
-               diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-               hvalues.append(diff)
-            h_hat = max(hvalues) if hvalues else H
-            h_used = max([h_hat, 1e-8])   
-    
-            # STEP 3: vypocet pruseciku a M_i
-            Mi = []
-            yi = []
-            for i in range(1, len(xk)):
-            
-                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
-                yi.append(y)
-                # Vypocet M_i 
-                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
-            
-            # STEP 4: vyber intervalu 
-        
-            idx = np.argmin(Mi)
-            y_star = yi[idx]
-            
-            # STEP 5: zastavovaci podminka
-            if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
-                break
-
-           
-            xk.append(y_star)
-            zk.append(self.F(y_star,n,whatFunc))
-            k += 1
-        
-        min_idx = np.argmin(zk)
-        t_min = xk[min_idx]               # parametr t na Hilbertově křivce
-        x_min, y_min = self.hilbert_point(t_min)  # souřadnice v R^2
-        
-        if whatFunc==0:
-            f_min = self.f(x_min, y_min)      # hodnota funkce f(x,y)
-        elif whatFunc==1:
-            f_min = self.f1(x_min, y_min)
-        else:
-            f_min = self.f2(x_min,y_min)
-
-        return t_min, f_min, x_min, y_min
 
 
 
