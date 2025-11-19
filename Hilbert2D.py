@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar, differential_evolution
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as patches
@@ -292,42 +292,73 @@ class Hilbert2D:
 
 
     def compare_algorithms(self, H, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+        """
+        Porovnání Holder algoritmu vs scipy vs differential evolution.
+        
+        Parameters
+        ----------
+        H : float
+            Hölder odhad (konstanta).
+        r : float
+            Parametr algoritmu.
+        eps : float
+            Přesnost.
+        max_iter : int
+            Maximální počet iterací.
+        N_vals : list[int]
+            Seznam hodnot řádu Hilbertovy křivky.
+        x_min, x_max, y_min, y_max : float
+            Hranice oblasti pro mapped algoritmus.
+        whatFunc : int
+            0 = f, 1 = f1, 2 = f2.
+        true_min : float
+            Opravdové minimum (pro porovnání).
+        """
 
         results = []
 
-        for n in N_vals:
-            # mapped
+        for i, n in enumerate(N_vals):
+            # Holder algorithm
             _, f_m, _, _ = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
             diff_m = abs(f_m - true_min)
 
-            # nemapped
+            # Scipy minimize_scalar with Hilbert curve
             _,_,f_nm = self.find_minimum_mapped(n, x_min, x_max, y_min, y_max, whatFunc)
             diff_nm = abs(f_nm - true_min)
+            
+            # Differential evolution on Hilbert curve (1D parameter t)
+            f_de_hilbert, _, _ = self.differential_evolution_hilbert(n, x_min, x_max, y_min, y_max, whatFunc, maxiter=max_iter//10)
+            diff_de_hilbert = abs(f_de_hilbert - true_min)
+            
+            # Differential evolution direct 2D (run occasionally for comparison)
+            if i == 0:  # Run only once for reference
+                f_de_direct, _, _ = self.differential_evolution_mapped(x_min, x_max, y_min, y_max, whatFunc, maxiter=max_iter//10)
+                diff_de_direct = abs(f_de_direct - true_min)
 
-            results.append([n, f_m, diff_m, f_nm, diff_nm])
+            results.append([n, f_m, diff_m, f_nm, diff_nm, f_de_hilbert, diff_de_hilbert, f_de_direct if i == 0 else f_de_direct, diff_de_direct if i == 0 else diff_de_direct])
 
-            df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota alg z lib", "Rozdíl alg z lib"])
-        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl alg z lib"]])
+        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota scipy", "Rozdíl scipy", "Hodnota DE-Hilbert", "Rozdíl DE-Hilbert", "Hodnota DE-Direct", "Rozdíl DE-Direct"])
+        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl scipy", "Rozdíl DE-Hilbert"]])
         n_arr = df["Iterace n"].to_numpy()
-        mapped_arr = df["Rozdíl Hoelder"].to_numpy()
-        nemapped_arr = df["Rozdíl alg z lib"].to_numpy()
-        # tabulka
-        # graf přes seaborn
-        plt.figure(figsize=(8, 5))
-    # Use numpy arrays for plotting
-        n_arr = df["Iterace n"].to_numpy()
-        mapped_arr = df["Rozdíl Hoelder"].to_numpy()
-        nemapped_arr = df["Rozdíl alg z lib"].to_numpy()
-        plt.plot(n_arr, mapped_arr, 'o-', label="Holder")
-        plt.plot(n_arr, nemapped_arr, 's-', label="Algoritmus z knihovny")
+        holder_arr = df["Rozdíl Hoelder"].to_numpy()
+        scipy_arr = df["Rozdíl scipy"].to_numpy()
+        de_hilbert_arr = df["Rozdíl DE-Hilbert"].to_numpy()
+        de_direct_val = df["Rozdíl DE-Direct"].iloc[0]
+        
+        plt.figure(figsize=(12, 7))
+        plt.plot(n_arr, holder_arr, 'o-', label="Hölder algoritmus")
+        plt.plot(n_arr, scipy_arr, 's-', label="Scipy (Hilbert)")
+        plt.plot(n_arr, de_hilbert_arr, '^-', label="DE na Hilbertově křivce")
+        plt.axhline(y=de_direct_val, color='r', linestyle='--', label=f"DE přímá 2D (referenční)")
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
-        plt.title("Porovnání Hölder algortimu vs. algoritmu z knihovny")
+        plt.title("Porovnání optimalizačních algoritmů")
         plt.yscale("log")  
         plt.grid(True, which="both", ls="--", lw=0.5)
         plt.legend()
         plt.show()
         
+        return df
     
 
 
@@ -407,6 +438,41 @@ class Hilbert2D:
         else:
             f_min = self.f2(*h_min)
         return t_min, h_min, f_min
+
+    def differential_evolution_mapped(self, x_min, x_max, y_min, y_max, whatFunc, maxiter=30):
+        
+        def objective(coords):
+            x, y = coords
+            if whatFunc == 0:
+                return self.f(x, y)
+            elif whatFunc == 1:
+                return self.f1(x, y)
+            else:
+                return self.f2(x, y)
+        
+        bounds = [(x_min, x_max), (y_min, y_max)]
+        
+        result = differential_evolution(objective, bounds, maxiter=maxiter)
+        
+        x_min_de, y_min_de = result.x
+        f_min = result.fun
+        
+        return f_min, x_min_de, y_min_de
+
+    def differential_evolution_hilbert(self, n, x_min, x_max, y_min, y_max, whatFunc, maxiter=30):
+       
+        def objective(t_array):
+            t = t_array[0]  
+            return self.F_mapped(t, n, x_min, x_max, y_min, y_max, whatFunc)
+        
+        bounds = [(0.0, 1.0)]
+        result = differential_evolution(objective, bounds, maxiter=maxiter)
+        
+        t_min = result.x[0]
+        f_min = result.fun
+        x_min_de, y_min_de = self.map_to_area(t_min, n, x_min, x_max, y_min, y_max)
+        
+        return f_min, x_min_de, y_min_de
     
 
 
