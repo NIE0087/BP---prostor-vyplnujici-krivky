@@ -636,29 +636,35 @@ class Hilbert2D:
 
 
             color = colors[i % len(colors)]
-            # Jednotlivé paraboloidy (tenčí čáry)
-            ax1.plot(t_interval, parab1, '--', color=color, alpha=0.9, linewidth=1,
-                    label=f'Parab. z bodu {i-1}' if i <= 3 else '')
-            ax1.plot(t_interval, parab2, ':', color=color, alpha=0.9, linewidth=1,
-                    label=f'Parab. z bodu {i}' if i <= 3 else '')
             
-            # Lineární aproximace (pro hledání průsečíku)
-            ax1.plot(t_interval, line1, '-', color='black', linewidth=1)
-            ax1.plot(t_interval, line2, '-', color='black', linewidth=1)
+            ax1.plot(t_interval, parab1, '--', color=color, alpha=0.9, linewidth=2,
+                    label=f'$ri_n$ (z bodu {i-1})' if i <= 3 else '')
+            ax1.plot(t_interval, parab2, ':', color=color, alpha=0.9, linewidth=2)
             
-            # Průsečík
+          
+            ax1.plot(t_interval, line1, '-', color='darkgray', alpha=0.7, linewidth=1,
+                    label='$li_n$' if i == 1 else '')
+            ax1.plot(t_interval, line2, '-', color='darkgray', alpha=0.7, linewidth=1)
+            
+         
             if x1 <= y_intersect <= x2:
                 z_intersect = self.F_mapped(y_intersect, n, x_min, x_max, y_min, y_max, whatFunc)
                 
-        
+            
+                Mi_value = min(z1 - r*h_used * abs(y_intersect - x1)**(1/N), 
+                              z2 - r*h_used * abs(x2 - y_intersect)**(1/N))
                 
-                ax1.scatter([y_intersect], [z_intersect], color=color, s=100, marker='x', zorder=10, label='F(yi)' if i == 1 else '')
-                # Vertikální čára z průsečíku
+                ax1.scatter([y_intersect], [z_intersect], color=color, s=100, marker='x', zorder=10, 
+                           label='F(yi)' if i == 1 else '')
+             
+                ax1.scatter([y_intersect], [Mi_value], color='pink', s=80, marker='o', zorder=15,
+                           label='Mi' if i == 1 else '')
+                
                 ax1.axvline(x=y_intersect, color=color, linestyle=':', alpha=0.6, linewidth=1)
         
-        ax1.set_xlabel('t (parametr na Hilbertově křivce)')
+        ax1.set_xlabel('t')
         ax1.set_ylabel('F(t)')
-        ax1.set_title(f'Iterace {iteration}: Paraboloidy a jejich průsečíky')
+        ax1.set_title(f'Iterace {iteration}')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         
