@@ -316,40 +316,33 @@ class Hilbert2D:
         """
 
         results = []
+        
+        # Spusť DE jednou pro referenci (nezávisí na n)
+        f_de_direct, _, _ = self.differential_evolution_mapped(x_min, x_max, y_min, y_max, whatFunc, maxiter=max_iter//10)
+        diff_de_direct = abs(f_de_direct - true_min)
 
-        for i, n in enumerate(N_vals):
+        for n in N_vals:
             # Holder algorithm
-            _, f_m, _, _ = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            _, f_m, _, _, _ = self.Holder_algorithm_mapped(H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
             diff_m = abs(f_m - true_min)
 
             # Scipy minimize_scalar with Hilbert curve
             _,_,f_nm = self.find_minimum_mapped(n, x_min, x_max, y_min, y_max, whatFunc)
             diff_nm = abs(f_nm - true_min)
             
-            # Differential evolution on Hilbert curve (1D parameter t)
-            f_de_hilbert, _, _ = self.differential_evolution_hilbert(n, x_min, x_max, y_min, y_max, whatFunc, maxiter=max_iter//10)
-            diff_de_hilbert = abs(f_de_hilbert - true_min)
-            
-            # Differential evolution direct 2D (run occasionally for comparison)
-            if i == 0:  # Run only once for reference
-                f_de_direct, _, _ = self.differential_evolution_mapped(x_min, x_max, y_min, y_max, whatFunc, maxiter=max_iter//10)
-                diff_de_direct = abs(f_de_direct - true_min)
+            results.append([n, f_m, diff_m, f_nm, diff_nm, f_de_direct, diff_de_direct])
 
-            results.append([n, f_m, diff_m, f_nm, diff_nm, f_de_hilbert, diff_de_hilbert, f_de_direct if i == 0 else f_de_direct, diff_de_direct if i == 0 else diff_de_direct])
-
-        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota scipy", "Rozdíl scipy", "Hodnota DE-Hilbert", "Rozdíl DE-Hilbert", "Hodnota DE-Direct", "Rozdíl DE-Direct"])
-        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl scipy", "Rozdíl DE-Hilbert"]])
+        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota scipy", "Rozdíl scipy", "Hodnota DE", "Rozdíl DE"])
+        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl scipy", "Rozdíl DE"]])
         n_arr = df["Iterace n"].to_numpy()
         holder_arr = df["Rozdíl Hoelder"].to_numpy()
         scipy_arr = df["Rozdíl scipy"].to_numpy()
-        de_hilbert_arr = df["Rozdíl DE-Hilbert"].to_numpy()
-        de_direct_val = df["Rozdíl DE-Direct"].iloc[0]
+        de_val = df["Rozdíl DE"].iloc[0]  # Konstantní hodnota
         
-        plt.figure(figsize=(12, 7))
+        plt.figure(figsize=(10, 6))
         plt.plot(n_arr, holder_arr, 'o-', label="Hölder algoritmus")
         plt.plot(n_arr, scipy_arr, 's-', label="Scipy (Hilbert)")
-        plt.plot(n_arr, de_hilbert_arr, '^-', label="DE na Hilbertově křivce")
-        plt.axhline(y=de_direct_val, color='r', linestyle='--', label=f"DE přímá 2D (referenční)")
+        plt.axhline(y=de_val, color='r', linestyle='--', label=f"Differential Evolution")
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
         plt.title("Porovnání optimalizačních algoritmů")
@@ -459,22 +452,6 @@ class Hilbert2D:
         
         return f_min, x_min_de, y_min_de
 
-    def differential_evolution_hilbert(self, n, x_min, x_max, y_min, y_max, whatFunc, maxiter=30):
-       
-        def objective(t_array):
-            t = t_array[0]  
-            return self.F_mapped(t, n, x_min, x_max, y_min, y_max, whatFunc)
-        
-        bounds = [(0.0, 1.0)]
-        result = differential_evolution(objective, bounds, maxiter=maxiter)
-        
-        t_min = result.x[0]
-        f_min = result.fun
-        x_min_de, y_min_de = self.map_to_area(t_min, n, x_min, x_max, y_min, y_max)
-        
-        return f_min, x_min_de, y_min_de
-    
-
 
     def Holder_algorithm_mapped(self,H,r,eps,max_iter,n,x_min, x_max, y_min, y_max, whatFunc):
         N = 2                      
@@ -482,6 +459,7 @@ class Hilbert2D:
         xk = [0.0, 1.0]
         zk = [self.F_mapped(0.0,n, x_min, x_max, y_min, y_max, whatFunc), self.F_mapped(1.0,n, x_min, x_max, y_min, y_max, whatFunc)]
         k = 2
+        usedH_arr = []  # Track all H values used during iterations
 
         for iteracni_krok in range(max_iter):
             
@@ -496,7 +474,9 @@ class Hilbert2D:
                hvalues.append(diff)
             h_hat = max(hvalues) if hvalues else H
             h_used = max([h_hat, 1e-8])   
-    
+            usedH_arr.append(h_used)
+          
+          
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
             yi = []
@@ -530,7 +510,207 @@ class Hilbert2D:
             f_min = self.f1(x_min_mapped, y_min_mapped)
         else:
             f_min = self.f2(x_min_mapped,y_min_mapped)
-        return t_min, f_min, x_min_mapped, y_min_mapped
+        return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
+
+    def analyze_holder_constants(self, H_true, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc):
+    
+        results = []
+        
+        for n in N_vals:
+            _, _, _, _, usedH_arr = self.Holder_algorithm_mapped(H_true, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            
+            if usedH_arr:
+                h_final = usedH_arr[-1]
+                h_mean = np.mean(usedH_arr)
+                results.append([n, H_true, h_mean, h_final])
+            else:
+                results.append([n, H_true, 0, 0])
+        
+        df = pd.DataFrame(results, columns=["n", "H opravdové", "H průměr", "H finální"])
+        print(df)
+        
+        return df
+
+
+
+
+#    # --- Vykreslování paraboloidů ---
+
+
+
+    def plot_holder_paraboloids(self, H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc, iteration_to_plot=0):
+    
+        N = 2
+        # STEP 0: inicializace
+        xk = [0.0, 1.0]
+        zk = [self.F_mapped(0.0, n, x_min, x_max, y_min, y_max, whatFunc), 
+              self.F_mapped(1.0, n, x_min, x_max, y_min, y_max, whatFunc)]
+        
+        current_iteration = 0
+        
+        for iteracni_krok in range(max_iter):
+            # STEP 1: serazeni bodu podle hodnoty
+            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
+
+            # STEP 2: odhad Holderovy konstanty pro paraboloidy
+            hvalues = []
+            for i in range(1, len(xk)):
+               diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+               hvalues.append(diff)
+            h_used = max(hvalues) if hvalues else H
+            h_used = max([h_used, 1e-8])
+
+            # STEP 2: odhad Holderovy konstanty pro lineární aproximaci
+            hvalues1 = []
+            for i in range(1, len(xk)):
+               diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1])) if abs(xk[i]-xk[i-1])>0 else 0
+               hvalues1.append(diff)
+            h_used1 = max(hvalues1) if hvalues1 else H
+            h_used1 = max([h_used1, 1e-8])
+            
+            # Pokud jsme na požadované iteraci, vykreslíme
+            if current_iteration == iteration_to_plot:
+                self._plot_paraboloids_at_iteration(xk, zk, h_used, h_used1, r, N, n, x_min, x_max, y_min, y_max, whatFunc, current_iteration)
+                return
+            
+            # STEP 3: vypocet pruseciku a M_i
+            Mi = []
+            yi = []
+            for i in range(1, len(xk)):
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
+
+                yi.append(y)
+                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), 
+                             zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+            
+            # STEP 4: vyber intervalu
+            idx = np.argmin(Mi)
+            y_star = yi[idx]
+            
+            # STEP 5: zastavovaci podminka
+            if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
+                break
+            
+            xk.append(y_star)
+            zk.append(self.F_mapped(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
+            current_iteration += 1
+
+    def _plot_paraboloids_at_iteration(self, xk, zk, h_used, h_used1, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
+     
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Levý graf: 1D průběh funkce na Hilbertově křivce + paraboloidy
+
+        P = 2**(2*n)
+        curve_points = []
+        t_values = []
+        for k in range(P+1):
+            t = k / P
+            t_values.append(t)
+            curve_points.append(self.map_to_area(t, n, x_min, x_max, y_min, y_max))
+        curve_points = np.array(curve_points)
+        f_dense = [self.F_mapped(t, n, x_min, x_max, y_min, y_max, whatFunc) for t in t_values]
+        
+        ax1.plot(t_values, f_dense, 'b-', alpha=0.7, label='F(t) na Hilbertově křivce')
+        ax1.scatter(xk, zk, color='red', s=50, zorder=5, label='Známé body')
+        
+    
+        colors = ['orange', 'green', 'purple', 'brown', 'pink']
+        for i in range(1, len(xk)):
+            x1, z1 = xk[i-1], zk[i-1]
+            x2, z2 = xk[i], zk[i]
+            
+        
+            y_intersect = 0.5*(x1 + x2) - (z2 - z1)/(2*r*h_used*(x2-x1)**((1-N)/N))
+        
+            
+        
+            # Používáme for loop mapovaný na P segmentů intervalu
+            P = 2**(2*n)
+            t_interval = []
+            parab1_vals = []
+            parab2_vals = []
+            
+            # Počet segmentů v intervalu podle P
+            num_segments = max(10, int(P * (x2 - x1)))
+            for j in range(num_segments + 1):
+                t = x1 + j * (x2 - x1) / num_segments
+                t_interval.append(t)
+                parab1_vals.append(z1 - r*h_used * abs(t - x1)**(1/N))  # z levého bodu
+                parab2_vals.append(z2 - r*h_used * abs(t - x2)**(1/N))  # z pravého bodu
+            
+            t_interval = np.array(t_interval)
+            parab1 = np.array(parab1_vals)
+            parab2 = np.array(parab2_vals)
+        
+            
+            interval_factor = (x2 - x1)**((1-N)/N)
+      
+            line1 = (-r*h_used1 * interval_factor * t_interval + 
+                    r*h_used1 * interval_factor * x1 + z1)
+            
+      
+            line2 = (r*h_used1 * interval_factor * t_interval - 
+                    r*h_used1 * interval_factor * x2 + z2)
+
+
+            color = colors[i % len(colors)]
+            # Jednotlivé paraboloidy (tenčí čáry)
+            ax1.plot(t_interval, parab1, '--', color=color, alpha=0.9, linewidth=1,
+                    label=f'Parab. z bodu {i-1}' if i <= 3 else '')
+            ax1.plot(t_interval, parab2, ':', color=color, alpha=0.9, linewidth=1,
+                    label=f'Parab. z bodu {i}' if i <= 3 else '')
+            
+            # Lineární aproximace (pro hledání průsečíku)
+            ax1.plot(t_interval, line1, '-', color='black', linewidth=1)
+            ax1.plot(t_interval, line2, '-', color='black', linewidth=1)
+            
+            # Průsečík
+            if x1 <= y_intersect <= x2:
+                z_intersect = self.F_mapped(y_intersect, n, x_min, x_max, y_min, y_max, whatFunc)
+                
+        
+                
+                ax1.scatter([y_intersect], [z_intersect], color=color, s=100, marker='x', zorder=10, label='F(yi)' if i == 1 else '')
+                # Vertikální čára z průsečíku
+                ax1.axvline(x=y_intersect, color=color, linestyle=':', alpha=0.6, linewidth=1)
+        
+        ax1.set_xlabel('t (parametr na Hilbertově křivce)')
+        ax1.set_ylabel('F(t)')
+        ax1.set_title(f'Iterace {iteration}: Paraboloidy a jejich průsečíky')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Pravý graf: 2D zobrazení bodů v původním prostoru
+        points_2d = [self.map_to_area(t, n, x_min, x_max, y_min, y_max) for t in xk]
+        points_2d = np.array(points_2d)
+        
+        ax2.scatter(points_2d[:, 0], points_2d[:, 1], color='red', s=50, zorder=5)
+        for i, (x, y) in enumerate(points_2d):
+            ax2.annotate(f'{i}', (x, y), xytext=(5, 5), textcoords='offset points')
+        
+        # Hilbertova křivka
+       
+        curve_points = []
+
+        for k in range(P+1):
+            t = k / P
+            curve_points.append(self.map_to_area(t, n, x_min, x_max, y_min, y_max))
+
+        curve_points = np.array(curve_points) 
+
+        
+        ax2.plot(curve_points[:, 0], curve_points[:, 1], 'b-', alpha=0.3, linewidth=1)
+        
+        ax2.set_xlabel('x')
+        ax2.set_ylabel('y')
+        ax2.set_title(f'Iterace {iteration}: Body v 2D prostoru')
+        ax2.grid(True, alpha=0.3)
+        ax2.set_xlim(x_min, x_max)
+        ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        plt.show()
 
 
 
