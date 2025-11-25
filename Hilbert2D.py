@@ -494,6 +494,7 @@ class Hilbert2D:
             
             # STEP 5: zastavovaci podminka
             if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
+                print(f"Algorithm stopped after {iteracni_krok} iterations.")
                 break
 
            
@@ -560,17 +561,11 @@ class Hilbert2D:
             h_used = max(hvalues) if hvalues else H
             h_used = max([h_used, 1e-8])
 
-            # STEP 2: odhad Holderovy konstanty pro lineární aproximaci
-            hvalues1 = []
-            for i in range(1, len(xk)):
-               diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1])) if abs(xk[i]-xk[i-1])>0 else 0
-               hvalues1.append(diff)
-            h_used1 = max(hvalues1) if hvalues1 else H
-            h_used1 = max([h_used1, 1e-8])
+
             
             # Pokud jsme na požadované iteraci, vykreslíme
             if current_iteration == iteration_to_plot:
-                self._plot_paraboloids_at_iteration(xk, zk, h_used, h_used1, r, N, n, x_min, x_max, y_min, y_max, whatFunc, current_iteration)
+                self._plot_paraboloids_at_iteration(xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, current_iteration)
                 return
             
             # STEP 3: vypocet pruseciku a M_i
@@ -595,7 +590,7 @@ class Hilbert2D:
             zk.append(self.F_mapped(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
             current_iteration += 1
 
-    def _plot_paraboloids_at_iteration(self, xk, zk, h_used, h_used1, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
+    def _plot_paraboloids_at_iteration(self, xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
      
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         
@@ -625,33 +620,19 @@ class Hilbert2D:
         
             
         
-            # Používáme for loop mapovaný na P segmentů intervalu
-            P = 2**(2*n)
-            t_interval = []
-            parab1_vals = []
-            parab2_vals = []
-            
-            # Počet segmentů v intervalu podle P
-            num_segments = max(10, int(P * (x2 - x1)))
-            for j in range(num_segments + 1):
-                t = x1 + j * (x2 - x1) / num_segments
-                t_interval.append(t)
-                parab1_vals.append(z1 - r*h_used * abs(t - x1)**(1/N))  # z levého bodu
-                parab2_vals.append(z2 - r*h_used * abs(t - x2)**(1/N))  # z pravého bodu
-            
-            t_interval = np.array(t_interval)
-            parab1 = np.array(parab1_vals)
-            parab2 = np.array(parab2_vals)
+            t_interval = np.linspace(x1, x2, 190)
+            parab1 = z1 - r*h_used * np.abs(t_interval - x1)**(1/N)  # z levého bodu
+            parab2 = z2 - r*h_used * np.abs(t_interval - x2)**(1/N)  # z pravého bodu
         
             
             interval_factor = (x2 - x1)**((1-N)/N)
       
-            line1 = (-r*h_used1 * interval_factor * t_interval + 
-                    r*h_used1 * interval_factor * x1 + z1)
+            line1 = (-r*h_used * interval_factor * t_interval + 
+                    r*h_used * interval_factor * x1 + z1)
             
       
-            line2 = (r*h_used1 * interval_factor * t_interval - 
-                    r*h_used1 * interval_factor * x2 + z2)
+            line2 = (r*h_used * interval_factor * t_interval - 
+                    r*h_used * interval_factor * x2 + z2)
 
 
             color = colors[i % len(colors)]
