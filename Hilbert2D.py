@@ -717,13 +717,56 @@ class Hilbert2D:
         
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
-        plt.title("Porovnání variant Hölderova algoritmu")
+        plt.title("Porovnání variant Hölderova algoritmu", fontsize=14)
         plt.yscale("log")
-        plt.grid(True, which="both", ls="--", lw=0.5)
-        plt.legend()
+        plt.grid(True, which="both", ls="-", alpha=0.3)
+        plt.legend(fontsize=10, frameon=True, fancybox=True)
         plt.tight_layout()
         plt.show()
         
+
+    def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+        """
+        Hyperparameter tuning pro parametr r
+        """
+        results = {f"r={r}": [] for r in r_values}
+        n_values = []
+        
+        for n in N_vals:
+            n_values.append(n)
+            for r in r_values:
+                _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+                diff = abs(f_min - true_min)
+                results[f"r={r}"].append(diff)
+        
+        # Vykreslí graf
+        plt.figure(figsize=(12, 8))
+        colors = plt.cm.viridis(np.linspace(0, 1, len(r_values)))
+        markers = ['o', 's', '^', 'v', 'D', 'P', '*', 'X']
+        
+        for i, r in enumerate(r_values):
+            marker = markers[i % len(markers)]
+            plt.plot(n_values, results[f"r={r}"], 
+                    color=colors[i], 
+                    marker=marker, 
+                    linestyle='-',
+                    label=f"r={r}", 
+                    linewidth=2, 
+                    markersize=6,
+                    markerfacecolor='white',
+                    markeredgecolor=colors[i],
+                    markeredgewidth=2)
+        
+        plt.xlabel("Iterace Hilbertovy křivky (n)", fontsize=12)
+        plt.ylabel("Rozdíl od opravdového minima", fontsize=12)
+        plt.title(f"Hyperparameter tuning r (H={H}, I={I})", fontsize=14)
+        plt.yscale("log")
+        plt.grid(True, which="both", ls="-", alpha=0.3)
+        plt.legend(fontsize=10, frameon=True, fancybox=True, ncol=2)
+        plt.tight_layout()
+        plt.show()
+        
+
 
 
 
