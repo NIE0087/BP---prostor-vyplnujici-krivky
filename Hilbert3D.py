@@ -251,7 +251,7 @@ class Hilbert3D:
     def Holder_algorithm(self,H,r,eps,max_iter,n):
         N = 3                      
         # STEP 0: inicializace
-        xk = [0.0, 0.9]
+        xk = [0.0, 1.0]
         zk = [self.F(0,n), self.F(1,n)]
         k = 2
 

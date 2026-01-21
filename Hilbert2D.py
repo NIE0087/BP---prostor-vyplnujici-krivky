@@ -180,14 +180,14 @@ class Hilbert2D:
         return ((x - 0.3)**2 + (y - 0.7)**2)**1/2 + 1
     
     
-    # --- Himmelblau's function --- 
+    # --- Booth function --- 
     # --- Three-hump camel function ---
     # --- Easom function ---
     @staticmethod
     def f1(x, y):
-        return (x**2 + y - 11)**2 + (y**2 + x - 7)**2
-        #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
-        #return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+        #return (x + 2*y - 7)**2 + (y + 2*x - 5)**2
+        return np.sin(x + y) + (x - y)**2 - 1.5 * x + 2.5 * y + 1
+        #return (1.5 - x + x*y)**2 + (2.25 - x + x*y**2)**2 + (2.625 - x + x*y**3)**2
     
 
     # --- Matyas function ---
@@ -195,26 +195,52 @@ class Hilbert2D:
     def f2(x, y):
         return 0.26*(x**2 + y**2) - 0.48*y*x
     
+     
+#################################################################
+# --------------------- MAPOVÁNÍ FUNKCÍ-------------------------#
+#################################################################
 
 
+    @staticmethod
+    def f1_square(x, y):
+        x_min=-1.5
+        x_max=4.5
+        y_min=-3
+        y_max=4.5
+       
+        u = x_min + x * (x_max - x_min)
+        v = y_min + y * (y_max - y_min)
 
+
+        return Hilbert2D.f1(u,v)
+        #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
+        #return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+    
+
+    # --- Matyas function ---
+    @staticmethod
+    def f2_square(x, y):
+        x_min=-10
+        x_max=10
+        y_min=-10
+        y_max=10
+       
+        u = x_min + x * (x_max - x_min)
+        v = y_min + y * (y_max - y_min)
+
+
+        return Hilbert2D.f2(u,v)
+    
+    
     #---- Složená funkce -----
     def F(self, t, n, whatFunc):
         x, y = self.hilbert_polygon_point(t,n)
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
-            return self.f1(x,y)
+            return self.f1_square(x,y)
         else:
-            return self.f2(x,y)
-     
-
-
-
-#################################################################
-# --------------------- MAPOVÁNÍ FUNKCÍ-------------------------#
-#################################################################
-
+            return self.f2_square(x,y)
 
 
     def map_to_area(self, t,n, x_min, x_max, y_min, y_max):
@@ -234,9 +260,9 @@ class Hilbert2D:
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
-            return self.f1(x,y)
+            return self.f1_square(x,y)
         else:
-            return self.f2(x,y)
+            return self.f2_square(x,y)
     
 
 #################################################################
@@ -253,9 +279,9 @@ class Hilbert2D:
         if whatFunc == 0:
             f_min = self.f(*h_min)
         elif whatFunc == 1:
-            f_min = self.f1(*h_min)
+            f_min = self.f1_square(*h_min)
         else:
-            f_min = self.f2(*h_min)
+            f_min = self.f2_square(*h_min)
         return t_min, h_min, f_min
 
 
@@ -289,7 +315,7 @@ class Hilbert2D:
         N = 2                      
         # STEP 0: inicializace
         xk = [0.0, 1.0]
-        zk = [self.F_mapped(0.0,n, x_min, x_max, y_min, y_max, whatFunc), self.F_mapped(1.0,n, x_min, x_max, y_min, y_max, whatFunc)]
+        zk = [self.F(0.0,n, whatFunc), self.F(1.0,n, whatFunc)]
         k = 2
         usedH_arr = []  
         
@@ -461,7 +487,7 @@ class Hilbert2D:
 
            
             xk.append(y_star)
-            zk.append(self.F_mapped(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
+            zk.append(self.F(y_star, n, whatFunc))
             k += 1
         
         min_idx = np.argmin(zk)
@@ -470,9 +496,10 @@ class Hilbert2D:
         if whatFunc==0:
             f_min = self.f(x_min_mapped, y_min_mapped)      # hodnota funkce f(x,y)
         elif whatFunc==1:
-            f_min = self.f1(x_min_mapped, y_min_mapped)
+            f_min = self.f1_square(x_min_mapped, y_min_mapped)
         else:
-            f_min = self.f2(x_min_mapped,y_min_mapped)
+            f_min = self.f2_square(x_min_mapped,y_min_mapped)
+    
         return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
 
 
@@ -483,11 +510,6 @@ class Hilbert2D:
 #################################################################
 # ------------ NEDŮLEŽITÉ VĚCI - POUZE GRAFY A TABULKY ---------#
 #################################################################
-
-
-
-
-
 
 
 
@@ -872,12 +894,9 @@ class Hilbert2D:
                 
                 usedH_viz.append(h_used)
             else:
-                hvalues = []
-                for i in range(1, len(xk)):
-                   diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-                   hvalues.append(diff)
-                h_used = max(hvalues) if hvalues else H
-                h_used = max([h_used, 1e-8])
+                h_used = H
+                
+            
                 usedH_viz.append(h_used)
 
 
