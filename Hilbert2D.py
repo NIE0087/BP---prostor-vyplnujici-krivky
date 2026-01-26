@@ -477,7 +477,7 @@ class Hilbert2D:
 
 
 
-    def find_minimum_mapped_ori(self,n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=500):
+    def find_minimum_mapped_raw(self,n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=500):
         """
         Hledání minima přímo v původní funkci (bez Hilbertovy křivky).
         Optimalizuje funkci přímo ve 2D prostoru pomocí scipy.optimize.minimize.
