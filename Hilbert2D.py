@@ -1,11 +1,34 @@
 import math
 import numpy as np
-from scipy.optimize import minimize_scalar, differential_evolution
+from scipy.optimize import minimize_scalar, differential_evolution, OptimizeResult, minimize
+from math import sqrt
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as patches
 import pandas as pd
 import seaborn as sns
+
+# Pomocné funkce pro _minimize_scalar_bounded
+def is_finite_scalar(x):
+    return np.isfinite(x) and np.isscalar(x)
+
+def _check_unknown_options(unknown_options):
+    if unknown_options:
+        msg = ", ".join(map(str, unknown_options.keys()))
+        raise TypeError(f"Unknown options: {msg}")
+
+def _endprint(x, flag, fval, maxfun, xtol, disp):
+    if flag == 0:
+        print(f"Optimization terminated successfully.")
+    elif flag == 1:
+        print(f"Maximum number of function evaluations exceeded: {maxfun}")
+    elif flag == 2:
+        print(f"NaN encountered.")
+    print(f"         Current function value: {fval}")
+    print(f"         Iterations: {maxfun}")
+    print(f"         Function evaluations: {maxfun}")
+
+_status_message = {'nan': 'NaN result encountered.'}
 
 class Hilbert2D:
 
@@ -260,9 +283,9 @@ class Hilbert2D:
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
-            return self.f1_square(x,y)
+            return self.f1(x,y)
         else:
-            return self.f2_square(x,y)
+            return self.f2(x,y)
     
 
 #################################################################
@@ -271,23 +294,240 @@ class Hilbert2D:
 
 
 
+    def _minimize_scalar_bounded(self, func, bounds, true_min, args=(),
+                             xatol=1e-5, ftol=1e-6, maxiter=200, disp=0,
+                             original_func=None, map_params=None,
+                             **unknown_options):
+ 
+        _check_unknown_options(unknown_options)
+        maxfun = maxiter
+        # Test bounds are of correct form
+        if len(bounds) != 2:
+            raise ValueError('bounds must have two elements.')
+        x1, x2 = bounds
 
-    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc):
-        result = minimize_scalar(lambda t: self.F_mapped(t,n, x_min, x_max, y_min, y_max, whatFunc), bounds=(0, 1), method='bounded')
+        if not (is_finite_scalar(x1) and is_finite_scalar(x2)):
+            raise ValueError("Optimization bounds must be finite scalars.")
+
+        if x1 > x2:
+            raise ValueError("The lower bound exceeds the upper bound.")
+
+        flag = 0
+        header = ' Func-count     x          f(x)          Procedure'
+        step = '       initial'
+
+        sqrt_eps = sqrt(2.2e-16)
+        golden_mean = 0.5 * (3.0 - sqrt(5.0))
+        a, b = x1, x2
+        fulc = a + golden_mean * (b - a)
+        nfc, xf = fulc, fulc
+        rat = e = 0.0
+        x = xf
+        fx = func(x, *args)
+        num = 1
+        fmin_data = (1, xf, fx)
+        fu = np.inf
+
+        ffulc = fnfc = fx
+        xm = 0.5 * (a + b)
+        tol1 = sqrt_eps * np.abs(xf) + xatol / 3.0
+        tol2 = 2.0 * tol1
+
+        if disp > 2:
+            print(" ")
+            print(header)
+            print("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
+
+        # Výpočet hodnoty původní funkce pro porovnání
+        if true_min is not None and original_func is not None and map_params is not None:
+            n, x_min, x_max, y_min, y_max, whatFunc = map_params
+            point = self.map_to_area(xf, n, x_min, x_max, y_min, y_max)
+            if whatFunc == 0:
+                original_fx = self.f(*point)
+            elif whatFunc == 1:
+                original_fx = self.f1(*point)
+            else:
+                original_fx = self.f2(*point)
+        else:
+            original_fx = fx
+
+        while (true_min is None or np.abs(original_fx - true_min) >= ftol):
+            golden = 1
+            # Check for parabolic fit
+            if np.abs(e) > tol1:
+                golden = 0
+                r = (xf - nfc) * (fx - ffulc)
+                q = (xf - fulc) * (fx - fnfc)
+                p = (xf - fulc) * q - (xf - nfc) * r
+                q = 2.0 * (q - r)
+                if q > 0.0:
+                    p = -p
+                q = np.abs(q)
+                r = e
+                e = rat
+
+                # Check for acceptability of parabola
+                if ((np.abs(p) < np.abs(0.5*q*r)) and (p > q*(a - xf)) and
+                        (p < q * (b - xf))):
+                    rat = (p + 0.0) / q
+                    x = xf + rat
+                    step = '       parabolic'
+
+                    if ((x - a) < tol2) or ((b - x) < tol2):
+                        si = np.sign(xm - xf) + ((xm - xf) == 0)
+                        rat = tol1 * si
+                else:      # do a golden-section step
+                    golden = 1
+
+            if golden:  # do a golden-section step
+                if xf >= xm:
+                    e = a - xf
+                else:
+                    e = b - xf
+                rat = golden_mean*e
+                step = '       golden'
+
+            si = np.sign(rat) + (rat == 0)
+            x = xf + si * np.maximum(np.abs(rat), tol1)
+            fu = func(x, *args)
+            num += 1
+            fmin_data = (num, x, fu)
+            if disp > 2:
+                print("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
+
+            if fu <= fx:
+                if x >= xf:
+                    a = xf
+                else:
+                    b = xf
+                fulc, ffulc = nfc, fnfc
+                nfc, fnfc = xf, fx
+                xf, fx = x, fu
+            else:
+                if x < xf:
+                    a = x
+                else:
+                    b = x
+                if (fu <= fnfc) or (nfc == xf):
+                    fulc, ffulc = nfc, fnfc
+                    nfc, fnfc = x, fu
+                elif (fu <= ffulc) or (fulc == xf) or (fulc == nfc):
+                    fulc, ffulc = x, fu
+
+            xm = 0.5 * (a + b)
+            tol1 = sqrt_eps * np.abs(xf) + xatol / 3.0
+            tol2 = 2.0 * tol1
+
+            # Přepočet hodnoty původní funkce pro aktuální xf
+            if true_min is not None and original_func is not None and map_params is not None:
+                n, x_min, x_max, y_min, y_max, whatFunc = map_params
+                point = self.map_to_area(xf, n, x_min, x_max, y_min, y_max)
+                if whatFunc == 0:
+                    original_fx = self.f(*point)
+                elif whatFunc == 1:
+                    original_fx = self.f1(*point)
+                else:
+                    original_fx = self.f2(*point)
+
+            if num >= maxfun:
+                flag = 1
+                break
+
+        if np.isnan(xf) or np.isnan(fx) or np.isnan(fu):
+            flag = 2
+
+        fval = fx
+        if disp > 0:
+            _endprint(x, flag, fval, maxfun, xatol, disp)
+
+        result = OptimizeResult(fun=fval, status=flag, success=(flag == 0),
+                                message={0: 'Solution found.',
+                                         1: 'Maximum number of function calls '
+                                            'reached.',
+                                         2: _status_message['nan']}.get(flag, ''),
+                                x=xf, nfev=num, nit=num)
+
+        return result
+
+
+
+
+
+    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc,true_min, ftol, maxiter=200):
+        map_params = (n, x_min, x_max, y_min, y_max, whatFunc)
+        result = self._minimize_scalar_bounded(
+            lambda t: self.F_mapped(t,n, x_min, x_max, y_min, y_max, whatFunc), 
+            bounds=(0, 1), 
+            true_min=true_min, 
+            ftol=ftol,
+            maxiter=maxiter,
+            original_func=True,
+            map_params=map_params
+        )
         t_min = result.x
         h_min = self.map_to_area(t_min,n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             f_min = self.f(*h_min)
         elif whatFunc == 1:
-            f_min = self.f1_square(*h_min)
+            f_min = self.f1(*h_min)
         else:
-            f_min = self.f2_square(*h_min)
-        return t_min, h_min, f_min
+            f_min = self.f2(*h_min)
+        nfev = result.nfev  # Počet vyhodnocení funkce
+        return t_min, h_min, f_min, nfev
+
+
+
+    def find_minimum_mapped_ori(self,n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=500):
+        """
+        Hledání minima přímo v původní funkci (bez Hilbertovy křivky).
+        Optimalizuje funkci přímo ve 2D prostoru pomocí scipy.optimize.minimize.
+        """
+        def objective(coords):
+            x, y = coords
+            if whatFunc == 0:
+                return self.f(x, y)
+            elif whatFunc == 1:
+                return self.f1(x, y)
+            else:
+                return self.f2(x, y)
+        
+        
+        iteration_count = [0]
+        def callback(xk):
+            iteration_count[0] += 1
+            if true_min is not None:
+                current_f = objective(xk)
+                if np.abs(current_f - true_min) < ftol:
+                    return True  
+            if iteration_count[0] >= maxiter:
+                return True
+            return False
+        
+        
+        x0 = [(x_min + x_max) / 2, (y_min + y_max) / 2]
+        bounds = [(x_min, x_max), (y_min, y_max)]
+        
+        
+        result = minimize(
+            objective, 
+            x0, 
+            method='L-BFGS-B',
+            bounds=bounds,
+            callback=callback,
+            options={'maxiter': maxiter, 'ftol': ftol}
+        )
+        
+        x_min_found, y_min_found = result.x
+        f_min = result.fun
+        
+        return  x_min_found, y_min_found,f_min
+
+     
 
 
 
 
-    def differential_evolution_mapped(self, x_min, x_max, y_min, y_max, whatFunc, maxiter=30):
+    def differential_evolution_mapped(self, x_min, x_max, y_min, y_max, whatFunc, true_min=None, ftol=1e-6, maxiter=200):
         
         def objective(coords):
             x, y = coords
@@ -298,20 +538,34 @@ class Hilbert2D:
             else:
                 return self.f2(x, y)
         
+        # Callback pro kontrolu ukončovací podmínky ftol
+        iteration_count = [0]
+        def callback(xk, convergence=0):
+            iteration_count[0] += 1
+            if true_min is not None:
+                current_f = objective(xk)
+                if np.abs(current_f - true_min) < ftol:
+                    print(f"Differential evolution stopped after {iteration_count[0]} iterations - desired accuracy achieved.")
+                    return True  # Ukončit optimalizaci
+            return False
+        
         bounds = [(x_min, x_max), (y_min, y_max)]
         
-        result = differential_evolution(objective, bounds, maxiter=maxiter)
+        result = differential_evolution(objective, bounds, maxiter=maxiter, callback=callback)
         
         x_min_de, y_min_de = result.x
         f_min = result.fun
         
-        return f_min, x_min_de, y_min_de
+        # Vytiskni počet iterací
+        print(f"Differential evolution completed: {iteration_count[0]} iterations, f_min = {f_min}")
+        
+        return f_min, x_min_de, y_min_de, iteration_count[0]
 
 
 
 
 
-    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n,x_min, x_max, y_min, y_max, whatFunc):
+    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol):
         N = 2                      
         # STEP 0: inicializace
         xk = [0.0, 1.0]
@@ -411,7 +665,7 @@ class Hilbert2D:
             Mi = []
             yi = []
             for i in range(1, len(xk)):
-            
+                
                 y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
                 yi.append(y)
                 # Vypocet M_i 
@@ -479,10 +733,22 @@ class Hilbert2D:
                 
                 y_star = yi[idx]
             
-            # STEP 5: zastavovaci podminka - kontrolujeme velikost vybraného intervalu
-            interval_length = abs(xk[idx+1] - xk[idx]) if idx+1 < len(xk) else float('inf')
-            if interval_length**(1/N) < eps:
-                print(f"Algorithm stopped after {iteracni_krok} iterations.")
+            # STEP 5: zastavovaci podminka
+            # Výpočet hodnoty původní funkce pro aktuální nejlepší bod
+            min_idx = np.argmin(zk)
+            t_current = xk[min_idx]
+            x_current, y_current = self.hilbert_polygon_point(t_current,n)
+            
+            if whatFunc == 0:
+                f_current = self.f(x_current, y_current)
+            elif whatFunc == 1:
+                f_current = self.f1_square(x_current, y_current)
+            else:
+                f_current = self.f2_square(x_current, y_current)
+            
+            # Kontrola přesnosti od skutečného minima
+            if true_min is not None and abs(f_current - true_min) < ftol:
+                print(f"Algorithm stopped after {iteracni_krok} iterations - desired accuracy achieved.")
                 break
 
            
@@ -492,7 +758,7 @@ class Hilbert2D:
         
         min_idx = np.argmin(zk)
         t_min = xk[min_idx]               # parametr t na Hilbertově křivce
-        x_min_mapped, y_min_mapped = self.map_to_area(t_min, n,x_min, x_max, y_min, y_max)  # souřadnice v R^2
+        x_min_mapped, y_min_mapped = self.hilbert_polygon_point(t_min,n)  # souřadnice v R^2
         if whatFunc==0:
             f_min = self.f(x_min_mapped, y_min_mapped)      # hodnota funkce f(x,y)
         elif whatFunc==1:
@@ -503,8 +769,135 @@ class Hilbert2D:
         return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
 
 
+    def compare_iteration_counts(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-2, I=2, r=3, eps=1e-6, max_iter_holder=1000):
+       
+
+        
+        results = {}
+        
+        # 1. Minimize Scalar (Brent's method)
+        
+        try:
+            t_min, h_min, f_min, nfev = self.find_minimum_mapped(
+                n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter
+            )
+            x_mapped, y_mapped = h_min
+            results['minimize_scalar'] = {
+                'iterations': nfev,
+                'f_min': f_min,
+                'x': x_mapped,
+                'y': y_mapped,
+                'success': True
+            }
+        except Exception as e:
+            results['minimize_scalar'] = {
+                'iterations': None,
+                'f_min': None,
+                'success': False,
+                'error': str(e)
+            }
+        
+        # 2. Differential Evolution
+       
+        try:
+            f_min, x_mapped, y_mapped, nfev = self.differential_evolution_mapped(
+                x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter
+            )
+            results['differential_evolution'] = {
+                'iterations': nfev,
+                'f_min': f_min,
+                'x': x_mapped,
+                'y': y_mapped,
+                'success': True
+            }
+        except Exception as e:
+            results['differential_evolution'] = {
+                'iterations': None,
+                'f_min': None,
+                'success': False,
+                'error': str(e)
+            }
+            
+        
+      
+        try:
+            t_min, f_min, x_mapped, y_mapped, usedH_arr = self.Holder_algorithm_mapped(
+                H, I, r, eps, max_iter_holder, n, whatFunc, true_min, ftol
+            )
+            
+            holder_iterations = len(usedH_arr)
+            results['holder'] = {
+                'iterations': holder_iterations,
+                'f_min': f_min,
+                'x': x_mapped,
+                'y': y_mapped,
+                'success': True
+            }
+        except Exception as e:
+            results['holder'] = {
+                'iterations': None,
+                'f_min': None,
+                'success': False,
+                'error': str(e)
+            }
+         
+        
+       
+        
+        return results
 
 
+    def compare_iterations_by_curve_order(self, n_values, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-2, I=2, r=3, eps=1e-6, max_iter_holder=1000):
+     
+        import pandas as pd
+        
+    
+        
+        all_results = {}
+        
+        for n in n_values:
+
+            
+            results = self.compare_iteration_counts(
+                n, x_min, x_max, y_min, y_max, whatFunc, true_min, 
+                ftol, maxiter, H, I, r, eps, max_iter_holder
+            )
+            
+            all_results[n] = results
+        
+        # Vytvoření souhrnné tabulky
+        print("\n" + "="*70)
+        print("SOUHRNNÁ TABULKA - POČET ITERACÍ PRO RŮZNÉ ŘÁDY KŘIVKY")
+        print("="*70 + "\n")
+        
+        
+        table_data = []
+        for n in n_values:
+            row = {'n': n}
+            for method in ['minimize_scalar', 'differential_evolution', 'holder']:
+                if all_results[n][method]['success']:
+                    row[method] = all_results[n][method]['iterations']
+                else:
+                    row[method] = 'FAIL'
+            table_data.append(row)
+        
+        # Vytvoření pandas DataFrame pro hezčí výpis
+        df = pd.DataFrame(table_data)
+        df.columns = ['n', 'Minimize Scalar', 'Diff. Evolution', 'Holder']
+        print(df.to_string(index=False))
+        
+       
+        
+        for method in ['minimize_scalar', 'differential_evolution', 'holder']:
+            method_name = method.replace('_', ' ').title()
+            iterations = [all_results[n][method]['iterations'] 
+                         for n in n_values 
+                         if all_results[n][method]['success'] and all_results[n][method]['iterations'] is not None]
+            
+        
+
+        
+        return all_results, df
 
 
 #################################################################
@@ -677,11 +1070,11 @@ class Hilbert2D:
         
         for n in N_vals:
           
-            _, f_m, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            _, f_m, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps)
             diff_m = abs(f_m - true_min)
 
        
-            _,_,f_nm = self.find_minimum_mapped(n, x_min, x_max, y_min, y_max, whatFunc)
+            _,_,f_nm,_ = self.find_minimum_mapped(n, x_min, x_max, y_min, y_max, whatFunc,true_min, ftol=eps)
             diff_nm = abs(f_nm - true_min)
             
             results.append([n, f_m, diff_m, f_nm, diff_nm])
@@ -705,7 +1098,7 @@ class Hilbert2D:
         
         return df
 
-    def compare_holder_variants(self, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+    def compare_holder_variants(self, r, eps, max_iter, N_vals, whatFunc, true_min):
         """
         Porovná různé varianty Hölderova algoritmu:
         H=-1 vs H=-2 a I=1 vs I=2
@@ -724,7 +1117,7 @@ class Hilbert2D:
         for n in N_vals:
             n_values.append(n)
             for name, H, I in variants:
-                _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+                _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps)
                 diff = abs(f_min - true_min)
                 results[name].append(diff)
         
@@ -747,7 +1140,7 @@ class Hilbert2D:
         plt.show()
         
 
-    def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+    def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, whatFunc, true_min):
         """
         Hyperparameter tuning pro parametr r
         """
@@ -757,7 +1150,7 @@ class Hilbert2D:
         for n in N_vals:
             n_values.append(n)
             for r in r_values:
-                _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+                _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps)
                 diff = abs(f_min - true_min)
                 results[f"r={r}"].append(diff)
         
@@ -794,12 +1187,12 @@ class Hilbert2D:
 
 
 
-    def analyze_holder_constants(self, H_true,I,H, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc):
+    def analyze_holder_constants(self, H_true,I,H, r, eps, max_iter, N_vals, whatFunc):
     
         results = []
         
         for n in N_vals:
-            _, _, _, _, usedH_arr = self.Holder_algorithm_mapped(H,I, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc)
+            _, _, _, _, usedH_arr = self.Holder_algorithm_mapped(H,I, r, eps, max_iter, n, whatFunc, true_min=None, ftol=eps)
             
             if usedH_arr:
                 h_final = usedH_arr[-1]
