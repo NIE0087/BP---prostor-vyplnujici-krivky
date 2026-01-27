@@ -538,7 +538,7 @@ class Hilbert2D:
             else:
                 return self.f2(x, y)
         
-        # Callback pro kontrolu ukončovací podmínky ftol
+   
         iteration_count = [0]
         def callback(xk, convergence=0):
             iteration_count[0] += 1
@@ -546,7 +546,7 @@ class Hilbert2D:
                 current_f = objective(xk)
                 if np.abs(current_f - true_min) < ftol:
                     print(f"Differential evolution stopped after {iteration_count[0]} iterations - desired accuracy achieved.")
-                    return True  # Ukončit optimalizaci
+                    return True 
             return False
         
         bounds = [(x_min, x_max), (y_min, y_max)]
@@ -556,10 +556,10 @@ class Hilbert2D:
         x_min_de, y_min_de = result.x
         f_min = result.fun
         
-        # Vytiskni počet iterací
-        print(f"Differential evolution completed: {iteration_count[0]} iterations, f_min = {f_min}")
+     
+        print(f"Differential evolution completed: {iteration_count[0]} generations, {result.nfev} function evaluations, f_min = {f_min}")
         
-        return f_min, x_min_de, y_min_de, iteration_count[0]
+        return f_min, x_min_de, y_min_de, iteration_count[0], result.nfev
 
 
 
@@ -800,11 +800,12 @@ class Hilbert2D:
         # 2. Differential Evolution
        
         try:
-            f_min, x_mapped, y_mapped, nfev = self.differential_evolution_mapped(
+            f_min, x_mapped, y_mapped, generations, nfev = self.differential_evolution_mapped(
                 x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter
             )
             results['differential_evolution'] = {
                 'iterations': nfev,
+                'generations': generations,
                 'f_min': f_min,
                 'x': x_mapped,
                 'y': y_mapped,
@@ -864,8 +865,7 @@ class Hilbert2D:
             )
             
             all_results[n] = results
-        
-        # Vytvoření souhrnné tabulky
+       
         print("\n" + "="*70)
         print("SOUHRNNÁ TABULKA - POČET ITERACÍ PRO RŮZNÉ ŘÁDY KŘIVKY")
         print("="*70 + "\n")
