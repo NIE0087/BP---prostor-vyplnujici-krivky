@@ -592,7 +592,7 @@ class Hilbert2D:
                 for i in range(1, len(xk)):
                     diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
                     hvalues.append(diff)
-                h_hat = max(hvalues) if hvalues else H
+                h_hat = max(hvalues) 
                 h_used = max([h_hat, 1e-8])   
                 usedH_arr.append(h_used)
                 
@@ -600,16 +600,8 @@ class Hilbert2D:
             elif H == -2:
                 # -----------HOLDER-CONST(2)-----------
                 
-                if len(xk) < 3:
-                    # Pro méně než 3 body 
-                    hvalues = []
-                    for i in range(1, len(xk)):
-                        diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-                        hvalues.append(diff)
-                    h_hat = max(hvalues) if hvalues else 1e-8
-                    h_used = max([h_hat, 1e-8])
                 
-                else:
+                
                     # Výpočet mi z rovnice (3.3)
                     m_values = []
                     for i in range(1, len(xk)):
@@ -618,12 +610,13 @@ class Hilbert2D:
                     
                     # Výpočet λi = max{mi-1, mi, mi+1}
                     lambda_values = []
-                    for i in range(1, len(m_values)-1):  
-                        lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
-                        lambda_values.append(lambda_i)
                     
-                    # Pro i=2 a i=k bereme jen odpovídající m hodnoty
-                    if len(m_values) == 2 or len(m_values) == max_iter:
+                    if len(xk) ==2:
+                        lambda_values.append(m_values[0])
+                    else:      
+                        for i in range(1, len(m_values)-1):  
+                            lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
+                            lambda_values.append(lambda_i)
                         lambda_2 = max(m_values[0], m_values[1])  # m2, m3
                         lambda_k = max(m_values[-2], m_values[-1])  # mk-1, mk
                         lambda_values = [lambda_2] + lambda_values + [lambda_k]
@@ -632,8 +625,8 @@ class Hilbert2D:
                     gamma_values = []
                     X_max = max([abs(xk[i] - xk[i-1])**(1/N) for i in range(1, len(xk))])
                     
-                    if iteracni_krok > 0:  # h^k z předchozí iterace
-                        h_k = usedH_arr[-1] if usedH_arr else 1e-8
+                    
+                    h_k = max(m_values)
                     
                     for i in range(1, len(xk)):
                         gamma_i = h_k * abs(xk[i] - xk[i-1]) / X_max
@@ -650,13 +643,14 @@ class Hilbert2D:
                             h_i = max(lambda_values[i], xi_param)
                         h_values.append(h_i)
                     
-                    h_used = max(h_values) if h_values else 1e-8
-                   
+                    h_used = h_values
+                    temporary = max(h_values) # pro vypocet gammy
                 
                 
                 
-                usedH_arr.append(h_used)
+                    usedH_arr.append(temporary)
             else:
+            
                 h_used = H
                 
                 usedH_arr.append(h_used)
@@ -664,12 +658,23 @@ class Hilbert2D:
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
             yi = []
-            for i in range(1, len(xk)):
+            
+            if H == -1 or H >= 0:
+            
+                for i in range(1, len(xk)):
                 
-                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
-                yi.append(y)
-                # Vypocet M_i 
-                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+                    y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
+                    yi.append(y)
+                    # Vypocet M_i 
+                    Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+            else:
+
+                for i in range(1, len(xk)):
+                    h_i = max(h_used[i-1], 1e-8)
+                    y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_i*(xk[i]-xk[i-1])**((1-N)/N))
+                    yi.append(y)
+                    # Vypocet M_i 
+                    Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
             
             # STEP 4: vyber intervalu - implementace SELECT(2)
             if I==1:
@@ -848,7 +853,7 @@ class Hilbert2D:
         return results
 
 
-    def compare_iterations_by_curve_order(self, n_values, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-2, I=2, r=3, eps=1e-6, max_iter_holder=1000):
+    def compare_iterations_by_curve_order(self, n_values, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-1, I=2, r=3, eps=1e-6, max_iter_holder=1000):
      
         import pandas as pd
         
