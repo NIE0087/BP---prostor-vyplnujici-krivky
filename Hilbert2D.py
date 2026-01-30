@@ -178,8 +178,12 @@ class Hilbert2D:
 
     def mainstream_hilbert_point(self, t, n):
         
+        if t == 1.0:
+            q = [3] * n
+        else:
+            q = self.dec_to_quarter(t)
+            q = q[:n]
         
-        q = self.dec_to_quarter(t)
         e0, dj = self.ej_and_dj_counter(q)
         point = self.calculate_mainstream_point(e0, dj, q, n)
         return point.flatten()
@@ -287,6 +291,29 @@ class Hilbert2D:
         else:
             return self.f2(x,y)
     
+    def map_to_area_mainstream(self, t, n, x_min, x_max, y_min, y_max):
+        """
+        Přemapuje bod z jednotkového čtverce [0,1]x[0,1]
+        do obdélníku [x_min, x_max] x [y_min, y_max]
+        pomocí mainstream Hilbertovy křivky.
+        """
+        point = self.mainstream_hilbert_point(t, n)
+        px, py = point
+        new_x = x_min + (x_max - x_min) * px
+        new_y = y_min + (y_max - y_min) * py
+        return np.array([new_x, new_y])
+    
+    def F_mapped_mainstream(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
+        """
+        Složená funkce pro mainstream Hilbertovu křivku.
+        """
+        x, y = self.map_to_area_mainstream(t, n, x_min, x_max, y_min, y_max)
+        if whatFunc == 0:
+            return self.f(x, y)
+        elif whatFunc == 1:
+            return self.f1(x, y)
+        else:
+            return self.f2(x, y)
 
 #################################################################
 # ------------ ALGORITMY HLEDAJÍCÍ MINIMA ----------------------#
@@ -1326,6 +1353,116 @@ class Hilbert2D:
             zk.append(self.F_mapped(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
             current_iteration += 1
 
+
+    def plot_holder_paraboloids_mainstream(self, H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc, iteration_to_plot=0):
+    
+        N = 2
+        # STEP 0: inicializace
+        xk = [0.0, 1.0]
+        zk = [self.F_mapped_mainstream(0.0, n, x_min, x_max, y_min, y_max, whatFunc), 
+              self.F_mapped_mainstream(1.0, n, x_min, x_max, y_min, y_max, whatFunc)]
+        
+        current_iteration = 0
+        usedH_viz = []  # Pro sledování H hodnot ve vizualizaci
+        
+        for iteracni_krok in range(max_iter):
+            # STEP 1: serazeni bodu podle hodnoty
+            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
+
+            # STEP 2: odhad Holderovy konstanty pro paraboloidy (stejná logika jako v hlavním algoritmu)
+            if H == -1:
+                hvalues = []
+                for i in range(1, len(xk)):
+                    diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+                    hvalues.append(diff)
+                h_used = max(hvalues) if hvalues else 1e-8
+                h_used = max([h_used, 1e-8])
+                usedH_viz.append(h_used)
+            elif H == -2:
+                # HOLDER-CONST(2) implementace
+                if len(xk) < 3:
+                    hvalues = []
+                    for i in range(1, len(xk)):
+                        diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+                        hvalues.append(diff)
+                    h_used = max(hvalues) if hvalues else 1e-8
+                    h_used = max([h_used, 1e-8])
+                else:
+                    # Stejná implementace jako v hlavním algoritmu
+                    m_values = []
+                    for i in range(1, len(xk)):
+                        diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
+                        m_values.append(diff)
+                    
+                    lambda_values = []
+                    for i in range(1, len(m_values)-1):
+                        lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
+                        lambda_values.append(lambda_i)
+                    
+                    if len(m_values) >= 2:
+                        lambda_2 = max(m_values[0], m_values[1])
+                        lambda_k = max(m_values[-2], m_values[-1])
+                        lambda_values = [lambda_2] + lambda_values + [lambda_k]
+                    
+                    gamma_values = []
+                    X_max = max([abs(xk[i] - xk[i-1])**(1/N) for i in range(1, len(xk))])
+                    
+                    if iteracni_krok > 0:
+                        h_k = usedH_viz[-1] if usedH_viz else 1e-8
+                    else:
+                        h_k = 1e-8
+                    
+                    for i in range(1, len(xk)):
+                        gamma_i = h_k * abs(xk[i] - xk[i-1]) / X_max
+                        gamma_values.append(gamma_i)
+                    
+                    xi_param = 1e-8
+                    h_values = []
+                    for i in range(len(lambda_values)):
+                        if i < len(gamma_values):
+                            h_i = max(lambda_values[i], gamma_values[i], xi_param)
+                        else:
+                            h_i = max(lambda_values[i], xi_param)
+                        h_values.append(h_i)
+                    
+                    h_used = max(h_values) if h_values else 1e-8
+                
+                usedH_viz.append(h_used)
+            else:
+                h_used = H
+                
+            
+                usedH_viz.append(h_used)
+
+
+            
+            # Pokud jsme na požadované iteraci, vykreslíme s mainstream křivkou
+            if current_iteration == iteration_to_plot:
+                self._plot_paraboloids_at_iteration_mainstream(xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, current_iteration)
+                return
+            
+            # STEP 3: vypocet pruseciku a M_i
+            Mi = []
+            yi = []
+            for i in range(1, len(xk)):
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
+
+                yi.append(y)
+                Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), 
+                             zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
+            
+            # STEP 4: vyber intervalu
+            idx = np.argmin(Mi)
+            y_star = yi[idx]
+            
+            # STEP 5: zastavovaci podminka
+            if abs(xk[idx+1] - xk[idx])**(1/N) < eps:
+                break
+            
+            xk.append(y_star)
+            zk.append(self.F_mapped_mainstream(y_star, n, x_min, x_max, y_min, y_max, whatFunc))
+            current_iteration += 1
+
     
     
     
@@ -1336,11 +1473,11 @@ class Hilbert2D:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         
         # Levý graf: 1D průběh funkce na Hilbertově křivce + paraboloidy
-
+        
         P = 2**(2*n)
         curve_points = []
         t_values = []
-        for k in range(P+1):
+        for k in range(P):
             t = k / P
             t_values.append(t)
             curve_points.append(self.map_to_area(t, n, x_min, x_max, y_min, y_max))
@@ -1421,7 +1558,7 @@ class Hilbert2D:
        
         curve_points = []
 
-        for k in range(P+1):
+        for k in range(P):
             t = k / P
             curve_points.append(self.map_to_area(t, n, x_min, x_max, y_min, y_max))
 
@@ -1445,3 +1582,126 @@ class Hilbert2D:
 
 
 
+    def _plot_paraboloids_at_iteration_mainstream(self, xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
+     
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Levý graf: 1D průběh funkce na Hilbertově křivce + paraboloidy
+        
+        P = 4**n
+        curve_points = []
+        t_values = []
+        for k in range(P):
+            t = k / P
+            t_values.append(t)
+            # Používáme mainstream Hilbertovu křivku
+            point = self.mainstream_hilbert_point(t, n)
+            px, py = point
+            new_x = x_min + (x_max - x_min) * px
+            new_y = y_min + (y_max - y_min) * py
+            curve_points.append([new_x, new_y])
+        curve_points = np.array(curve_points)
+        f_dense = [self.F_mapped_mainstream(t, n, x_min, x_max, y_min, y_max, whatFunc) for t in t_values]
+        
+        ax1.plot(t_values, f_dense, 'b-', alpha=0.7, label='F(t) na Hilbertově křivce')
+        ax1.scatter(xk, zk, color='red', s=50, zorder=5, label='Známé body')
+        
+    
+        colors = ['orange', 'green', 'purple', 'brown', 'pink']
+        for i in range(1, len(xk)):
+            x1, z1 = xk[i-1], zk[i-1]
+            x2, z2 = xk[i], zk[i]
+            
+        
+            y_intersect = 0.5*(x1 + x2) - (z2 - z1)/(2*r*h_used*(x2-x1)**((1-N)/N))
+        
+            
+        
+            t_interval = np.linspace(x1, x2, 190)
+            parab1 = z1 - r*h_used * np.abs(t_interval - x1)**(1/N)  # z levého bodu
+            parab2 = z2 - r*h_used * np.abs(t_interval - x2)**(1/N)  # z pravého bodu
+        
+            
+            interval_factor = (x2 - x1)**((1-N)/N)
+      
+            line1 = (-r*h_used * interval_factor * t_interval + 
+                    r*h_used * interval_factor * x1 + z1)
+            
+      
+            line2 = (r*h_used * interval_factor * t_interval - 
+                    r*h_used * interval_factor * x2 + z2)
+
+
+            color = colors[i % len(colors)]
+            
+            ax1.plot(t_interval, parab1, '--', color=color, alpha=0.9, linewidth=2,
+                    label=f'$ri_n$ (z bodu {i-1})' if i <= 3 else '')
+            ax1.plot(t_interval, parab2, ':', color=color, alpha=0.9, linewidth=2)
+            
+          
+            ax1.plot(t_interval, line1, '-', color='darkgray', alpha=0.7, linewidth=1,
+                    label='$li_n$' if i == 1 else '')
+            ax1.plot(t_interval, line2, '-', color='darkgray', alpha=0.7, linewidth=1)
+            
+         
+            if x1 <= y_intersect <= x2:
+                z_intersect = self.F_mapped_mainstream(y_intersect, n, x_min, x_max, y_min, y_max, whatFunc)
+                
+            
+                Mi_value = min(z1 - r*h_used * abs(y_intersect - x1)**(1/N), 
+                              z2 - r*h_used * abs(x2 - y_intersect)**(1/N))
+                
+                ax1.scatter([y_intersect], [z_intersect], color=color, s=100, marker='x', zorder=10, 
+                           label='F(yi)' if i == 1 else '')
+             
+                ax1.scatter([y_intersect], [Mi_value], color='pink', s=80, marker='o', zorder=15,
+                           label='Mi' if i == 1 else '')
+                
+                ax1.axvline(x=y_intersect, color=color, linestyle=':', alpha=0.6, linewidth=1)
+        
+        ax1.set_xlabel('t')
+        ax1.set_ylabel('F(t)')
+        ax1.set_title(f'Iterace {iteration} (Mainstream Hilbert)')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Pravý graf: 2D zobrazení bodů v původním prostoru s mainstream křivkou
+        points_2d = []
+        for t in xk:
+            point = self.mainstream_hilbert_point(t, n)
+            px, py = point
+            new_x = x_min + (x_max - x_min) * px
+            new_y = y_min + (y_max - y_min) * py
+            points_2d.append([new_x, new_y])
+        points_2d = np.array(points_2d)
+      
+        ax2.scatter(points_2d[:, 0], points_2d[:, 1], color='red', s=50, zorder=5)
+        for i, (x, y) in enumerate(points_2d):
+            ax2.annotate(f'{i}', (x, y), xytext=(5, 5), textcoords='offset points')
+        
+        # Mainstream Hilbertova křivka pro vykreslení
+       
+        curve_points_main = []
+
+        for k in range(P):
+            t = k / P
+            point = self.mainstream_hilbert_point(t, n)
+            px, py = point
+            new_x = x_min + (x_max - x_min) * px
+            new_y = y_min + (y_max - y_min) * py
+            curve_points_main.append([new_x, new_y])
+
+        curve_points_main = np.array(curve_points_main) 
+       
+        
+        ax2.plot(curve_points_main[:, 0], curve_points_main[:, 1], 'b-', alpha=0.3, linewidth=1)
+        
+        ax2.set_xlabel('x')
+        ax2.set_ylabel('y')
+        ax2.set_title(f'Iterace {iteration}: Body v 2D prostoru (Mainstream)')
+        ax2.grid(True, alpha=0.3)
+        ax2.set_xlim(x_min, x_max)
+        ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        plt.show()
