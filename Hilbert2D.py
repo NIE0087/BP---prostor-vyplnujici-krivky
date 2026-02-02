@@ -601,8 +601,9 @@ class Hilbert2D:
         usedH_arr = []  
         
         # SELECT(2) state variables
-        flag = 1  
+        flag = 0  
         imin = 0  
+        side_flag = 0  # Pro střídání mezi right a left (0 = right, 1 = left)
 
         for iteracni_krok in range(max_iter):
             
@@ -620,8 +621,11 @@ class Hilbert2D:
                     diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
                     hvalues.append(diff)
                 h_hat = max(hvalues) 
-                h_used = max([h_hat, 1e-8])   
-                usedH_arr.append(h_used)
+                h_value = max([h_hat, 1e-8])
+                h_used = [h_value] * len(hvalues)
+                
+                usedH_arr.append(h_value)
+                
                 
             
             elif H == -2:
@@ -678,30 +682,22 @@ class Hilbert2D:
                     usedH_arr.append(temporary)
             else:
             
-                h_used = H
+                h_value = H
+              
+                h_used = [h_value] * (len(xk) - 1)
                 
-                usedH_arr.append(h_used)
+                usedH_arr.append(h_value)
           
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
             yi = []
             
-            if H == -1 or H >= 0:
-            
-                for i in range(1, len(xk)):
-                
-                    y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_used*(xk[i]-xk[i-1])**((1-N)/N))
-                    yi.append(y)
-                    # Vypocet M_i 
-                    Mi.append(min(zk[i-1] - r*h_used * abs(y - xk[i-1])**(1/N), zk[i] - r*h_used * abs(xk[i] - y)**(1/N)))
-            else:
-
-                for i in range(1, len(xk)):
-                    h_i = max(h_used[i-1], 1e-8)
-                    y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_i*(xk[i]-xk[i-1])**((1-N)/N))
-                    yi.append(y)
-                    # Vypocet M_i 
-                    Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
+            for i in range(1, len(xk)):
+                h_i = max(h_used[i-1], 1e-8)
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_i*(xk[i]-xk[i-1])**((1-N)/N))
+                yi.append(y)
+                # Vypocet M_i 
+                Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
             
             # STEP 4: vyber intervalu - implementace SELECT(2)
             if I==1:
@@ -710,6 +706,7 @@ class Hilbert2D:
                 
                 idx = np.argmin(Mi)
                 y_star = yi[idx]
+
             else:
                 
                 #----------- SELECT(2) ------------
@@ -726,29 +723,33 @@ class Hilbert2D:
                         imin = len(zk) - 1
                         
                 # Local improvement: Alternate the choice of interval
-                if flag == 0:
-                    delta = 1e-5 # δ > 0 threshold
+                    delta = 1e-5 
                     
                     # Local improvement logic around imin
                     if imin >= 1 and imin < len(xk)-1:
-                        # Kontrola velikosti intervalů kolem imin
+                       
                         left_size = abs(xk[imin] - xk[imin-1]) if imin > 0 else 0
                         right_size = abs(xk[imin+1] - xk[imin]) if imin+1 < len(xk) else 0
                         
-                        # Výběr intervalu podle velikosti a delta
+                        # Výběr intervalu podle velikosti a delta - střídání mezi right a left
                         
-                        if right_size > delta and imin < len(Mi):
-                         
-                            t_choice = imin 
+                        if side_flag == 0:  # nejprve right
+                            if right_size > delta and imin < len(Mi):
+                                t_choice = imin 
+                            elif left_size > delta and imin-1 < len(Mi):
+                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
+                            else:
+                                t_choice = np.argmin(Mi)  # standardní výběr
+                        else: 
+                            if left_size > delta and imin-1 < len(Mi):
+                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
+                            elif right_size > delta and imin < len(Mi):
+                                t_choice = imin 
+                            else:
+                                t_choice = np.argmin(Mi)  # standardní výběr
                         
-                        elif left_size > delta and imin-1 < len(Mi):
-                   
-                            t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
-                     
-
-                        else:
-                           
-                            t_choice = np.argmin(Mi)  # standardní výběr
+                        
+                        side_flag = 1 - side_flag
                             
                         # Ověření platnosti výběru
                         if 0 <= t_choice < len(Mi):
@@ -757,16 +758,17 @@ class Hilbert2D:
                                 idx = t_choice
                     
                     # Update flag
-                    flag = 1  
+                    flag = 0  
                 else:
                     # Reset flag and use standard selection
-                    flag = 0  
+                    flag = 1  
+                    idx= np.argmin(Mi)
                     imin = current_imin  # Update imin
                 
                 y_star = yi[idx]
             
             # STEP 5: zastavovaci podminka
-            # Výpočet hodnoty původní funkce pro aktuální nejlepší bod
+            
             min_idx = np.argmin(zk)
             t_current = xk[min_idx]
             x_current, y_current = self.hilbert_polygon_point(t_current,n)
