@@ -204,7 +204,7 @@ class Hilbert2D:
     @staticmethod
     # --- Random function ---
     def f(x, y):
-        return ((x - 0.3)**2 + (y - 0.7)**2)**1/2 + 1
+        return ((x - 0.3)**2 + (y - 0.7)**2)**(1/2) + 1
     
     
     # --- Booth function --- 
@@ -603,7 +603,7 @@ class Hilbert2D:
         # SELECT(2) state variables
         flag = 0  
         imin = 0  
-        side_flag = 0  # Pro střídání mezi right a left (0 = right, 1 = left)
+        side_flag = 0  
 
         for iteracni_krok in range(max_iter):
             
