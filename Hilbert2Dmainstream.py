@@ -30,18 +30,12 @@ def _endprint(x, flag, fval, maxfun, xtol, disp):
 
 _status_message = {'nan': 'NaN result encountered.'}
 
-class Hilbert2D:
+class Hilbert2Dmainstream:
 
     def __init__(self, precision: int):
         self.precision = precision
 
 
-
-
-#################################################################
-# ---------- SESTROJENÍ ITERACÍ HILBERTOVY KŘIVKY --------------#
-#################################################################
-    
     # --- Konverze ---
     def dec_to_quarter(self, number: float):
         q_num = []
@@ -61,10 +55,8 @@ class Hilbert2D:
         
         return q_num
     
-
-
-
-    # --- Hilbert 2D vzorec ---
+    
+    
     def ej_and_dj_counter(self, q_num):
         e0j_counted = np.zeros(len(q_num))
         e3j_counted = np.zeros(len(q_num))
@@ -80,47 +72,91 @@ class Hilbert2D:
         e0j_counted %= 2
         dj_counted = (e3j_counted + e0j_counted) % 2
         return e0j_counted, dj_counted
+    
 
-    
-    
-    def calculate_point(self, e0j_counted, dj_counted, q_num):
+
+    def calculate_mainstream_point(self, e0j_counted, dj_counted, q_num,n):
+        H0 = np.array([[0, 1],
+               [1, 0]])
+
+        H1 = np.array([[1, 0],
+               [0, 1]])
+
+        H2 = np.array([[1, 0],
+               [0, 1]])
+
+        H3 = np.array([[0, -1],
+               [-1, 0]])
+
+        H = [H0, H1, H2, H3]
+
+        F0 = np.array([1/2, 1/2])@ H[0]
+        F1 = np.array([1/2, 1/2])@ H[1]
+        F2 = np.array([1/2, 1/2])@ H[2]
+        F3 = np.array([1/2, 1/2])@ H[3]
+
+        F = [F0, F1, F2, F3]
+        soucin = np.eye(2)
+        
+        q_middle = q_num
+        
+        
+        
+        for j in (q_num[:-1]):
+            
+            soucin = soucin @ H[j]
+       
+        prvniScitanec = (1/2)**(n) * soucin @ F[q_num[-1]]
+      
         s = np.zeros((2, 1))
         for i in range(1, len(q_num) + 1):
             s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
                 np.sign(q_num[i-1]) *
                 np.array([[(1-dj_counted[i-1])*q_num[i-1]-1],
                           [1-dj_counted[i-1]*q_num[i-1]]])
-            )
-        return s
-    
-
-
-    def hilbert_point(self, t):
-        if t == 1.0:
-            return np.array([1.0, 0.0]) 
+            )  
+       
+        s = s.flatten()
+       
+        d = s + prvniScitanec
         
-        q = self.dec_to_quarter(t)
+    
+
+        return  d
+
+    
+
+    def mainstream_hilbert_point(self, t, n):
+        
+        if t == 1.0:
+            q = [3] * n
+        else:
+            q = self.dec_to_quarter(t)
+            q = q[:n]
+        
         e0, dj = self.ej_and_dj_counter(q)
-        point = self.calculate_point(e0, dj, q)
+        point = self.calculate_mainstream_point(e0, dj, q, n)
         return point.flatten()
-    
 
-    def hilbert_polygon_point(self, t, n):
+
+    def mainstream_hilbert_polygon_point(self, t, n):
+       
+        N = 2**(2*n)  
+        
     
-        N = 2**(2*n)
-    
-    
+        if t >= 1.0:
+            return self.mainstream_hilbert_point(1.0, n)
+        
         k = int(np.floor(t * N))
-   
-
-        p_k = self.hilbert_point(k / N)
-        p_k1 = self.hilbert_point((k + 1) / N)
-  
-        point = N * (t-(k/N))*p_k1 - N*(t-((k+1)/N))*p_k
-
+        
+      
+        p_k = self.mainstream_hilbert_point(k / N, n)
+        p_k1 = self.mainstream_hilbert_point((k + 1) / N, n)
+        
+     
+        point = N * (t - (k/N)) * p_k1 - N * (t - ((k+1)/N)) * p_k
+        
         return point
-
-
     
 
 #################################################################
@@ -150,8 +186,7 @@ class Hilbert2D:
     def f2(x, y):
         return 0.26*(x**2 + y**2) - 0.48*y*x
     
-     
-#################################################################
+    #################################################################
 # --------------------- MAPOVÁNÍ FUNKCÍ-------------------------#
 #################################################################
 
@@ -167,9 +202,8 @@ class Hilbert2D:
         v = y_min + y * (y_max - y_min)
 
 
-        return Hilbert2D.f1(u,v)
-        #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
-        #return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+        return Hilbert2Dmainstream.f1(u,v)
+      
     
 
     # --- Matyas function ---
@@ -184,12 +218,12 @@ class Hilbert2D:
         v = y_min + y * (y_max - y_min)
 
 
-        return Hilbert2D.f2(u,v)
+        return Hilbert2Dmainstream.f2(u,v)
     
     
     #---- Složená funkce -----
     def F(self, t, n, whatFunc):
-        x, y = self.hilbert_polygon_point(t,n)
+        x, y = self.mainstream_hilbert_polygon_point(t,n)
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
@@ -197,28 +231,28 @@ class Hilbert2D:
         else:
             return self.f2_square(x,y)
 
-
-    def map_to_area(self, t,n, x_min, x_max, y_min, y_max):
+    def map_to_area(self, t, n, x_min, x_max, y_min, y_max):
         """
         Přemapuje bod z jednotkového čtverce [0,1]x[0,1]
-        do obdélníku [x_min, x_max] x [y_min, y_max].
+        do obdélníku [x_min, x_max] x [y_min, y_max]
+        pomocí mainstream Hilbertovy křivky.
         """
-        point = self.hilbert_polygon_point(t,n)
+        point = self.mainstream_hilbert_polygon_point(t, n)
         px, py = point
         new_x = x_min + (x_max - x_min) * px
         new_y = y_min + (y_max - y_min) * py
         return np.array([new_x, new_y])
     
-    
     def F_mapped(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
-        x, y = self.map_to_area(t,n, x_min, x_max, y_min, y_max)
+    
+        x, y = self.map_to_area(t, n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
-            return self.f1(x,y)
+            return self.f1(x, y)
         else:
-            return self.f2(x,y)
-    
+            return self.f2(x, y)
+        
 
 #################################################################
 # ------------ ALGORITMY HLEDAJÍCÍ MINIMA ----------------------#
@@ -406,56 +440,6 @@ class Hilbert2D:
             f_min = self.f2(*h_min)
         nfev = result.nfev  # Počet vyhodnocení funkce
         return t_min, h_min, f_min, nfev
-
-
-
-    def find_minimum_mapped_raw(self,n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=500):
-        """
-        Hledání minima přímo v původní funkci (bez Hilbertovy křivky).
-        Optimalizuje funkci přímo ve 2D prostoru pomocí scipy.optimize.minimize.
-        """
-        def objective(coords):
-            x, y = coords
-            if whatFunc == 0:
-                return self.f(x, y)
-            elif whatFunc == 1:
-                return self.f1(x, y)
-            else:
-                return self.f2(x, y)
-        
-        
-        iteration_count = [0]
-        def callback(xk):
-            iteration_count[0] += 1
-            if true_min is not None:
-                current_f = objective(xk)
-                if np.abs(current_f - true_min) < ftol:
-                    return True  
-            if iteration_count[0] >= maxiter:
-                return True
-            return False
-        
-        
-        x0 = [(x_min + x_max) / 2, (y_min + y_max) / 2]
-        bounds = [(x_min, x_max), (y_min, y_max)]
-        
-        
-        result = minimize(
-            objective, 
-            x0, 
-            method='L-BFGS-B',
-            bounds=bounds,
-            callback=callback,
-            options={'maxiter': maxiter, 'ftol': ftol}
-        )
-        
-        x_min_found, y_min_found = result.x
-        f_min = result.fun
-        
-        return  x_min_found, y_min_found,f_min
-
-     
-
 
 
 
@@ -676,7 +660,7 @@ class Hilbert2D:
             
             min_idx = np.argmin(zk)
             t_current = xk[min_idx]
-            x_current, y_current = self.hilbert_polygon_point(t_current,n)
+            x_current, y_current = self.mainstream_hilbert_polygon_point(t_current,n)
             
             if whatFunc == 0:
                 f_current = self.f(x_current, y_current)
@@ -697,7 +681,7 @@ class Hilbert2D:
         
         min_idx = np.argmin(zk)
         t_min = xk[min_idx]               # parametr t na Hilbertově křivce
-        x_min_mapped, y_min_mapped = self.hilbert_polygon_point(t_min,n)  # souřadnice v R^2
+        x_min_mapped, y_min_mapped = self.mainstream_hilbert_polygon_point(t_min,n)  # souřadnice v R^2
         if whatFunc==0:
             f_min = self.f(x_min_mapped, y_min_mapped)      # hodnota funkce f(x,y)
         elif whatFunc==1:
@@ -708,4 +692,4 @@ class Hilbert2D:
         return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
 
 
-   
+
