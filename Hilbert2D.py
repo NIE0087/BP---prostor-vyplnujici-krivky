@@ -3,32 +3,14 @@ import numpy as np
 from scipy.optimize import minimize_scalar, differential_evolution, OptimizeResult, minimize
 from math import sqrt
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as patches
 import pandas as pd
 import seaborn as sns
+try:
+    import nlopt
+except ImportError:
+    nlopt = None
 
-# Pomocné funkce pro _minimize_scalar_bounded
-def is_finite_scalar(x):
-    return np.isfinite(x) and np.isscalar(x)
-
-def _check_unknown_options(unknown_options):
-    if unknown_options:
-        msg = ", ".join(map(str, unknown_options.keys()))
-        raise TypeError(f"Unknown options: {msg}")
-
-def _endprint(x, flag, fval, maxfun, xtol, disp):
-    if flag == 0:
-        print(f"Optimization terminated successfully.")
-    elif flag == 1:
-        print(f"Maximum number of function evaluations exceeded: {maxfun}")
-    elif flag == 2:
-        print(f"NaN encountered.")
-    print(f"         Current function value: {fval}")
-    print(f"         Iterations: {maxfun}")
-    print(f"         Function evaluations: {maxfun}")
-
-_status_message = {'nan': 'NaN result encountered.'}
 
 class Hilbert2D:
 
@@ -60,7 +42,6 @@ class Hilbert2D:
             q_num =[1] + [0] * self.precision
         
         return q_num
-    
 
 
 
@@ -208,10 +189,10 @@ class Hilbert2D:
         new_x = x_min + (x_max - x_min) * px
         new_y = y_min + (y_max - y_min) * py
         return np.array([new_x, new_y])
-    
-    
+
+
     def F_mapped(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
-        x, y = self.map_to_area(t,n, x_min, x_max, y_min, y_max)
+        x, y = self.map_to_area(t, n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             return self.f(x, y)
         elif whatFunc == 1:
@@ -224,237 +205,38 @@ class Hilbert2D:
 # ------------ ALGORITMY HLEDAJÍCÍ MINIMA ----------------------#
 #################################################################
 
+    def find_minimum_mapped(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter=200):
+        if nlopt is None:
+            raise ImportError("Package 'nlopt' is required for find_minimum_mapped. Install it with: pip install nlopt")
 
+        if true_min is None:
+            raise ValueError("true_min must be provided for ftol stopping in NLOPT.")
 
-    def _minimize_scalar_bounded(self, func, bounds, true_min, args=(),
-                             xatol=1e-5, ftol=1e-6, maxiter=200, disp=0,
-                             original_func=None, map_params=None,
-                             **unknown_options):
- 
-        _check_unknown_options(unknown_options)
-        maxfun = maxiter
-        # Test bounds are of correct form
-        if len(bounds) != 2:
-            raise ValueError('bounds must have two elements.')
-        x1, x2 = bounds
+        if ftol <= 0:
+            raise ValueError("ftol must be positive.")
 
-        if not (is_finite_scalar(x1) and is_finite_scalar(x2)):
-            raise ValueError("Optimization bounds must be finite scalars.")
+        def objective(x, grad):
+            return self.F_mapped(x[0], n, x_min, x_max, y_min, y_max, whatFunc)
 
-        if x1 > x2:
-            raise ValueError("The lower bound exceeds the upper bound.")
+        opt = nlopt.opt(nlopt.GN_DIRECT, 1)
+        opt.set_lower_bounds([0.0])
+        opt.set_upper_bounds([1.0])
+        opt.set_min_objective(objective)
+        opt.set_maxeval(maxiter)
+        # Stop as soon as the objective reaches the target band around known true minimum.
+        # For minimization this corresponds to |f - true_min| < ftol when f >= true_min.
+        opt.set_stopval(true_min + ftol)
 
-        flag = 0
-        header = ' Func-count     x          f(x)          Procedure'
-        step = '       initial'
-
-        sqrt_eps = sqrt(2.2e-16)
-        golden_mean = 0.5 * (3.0 - sqrt(5.0))
-        a, b = x1, x2
-        fulc = a + golden_mean * (b - a)
-        nfc, xf = fulc, fulc
-        rat = e = 0.0
-        x = xf
-        fx = func(x, *args)
-        num = 1
-        fmin_data = (1, xf, fx)
-        fu = np.inf
-
-        ffulc = fnfc = fx
-        xm = 0.5 * (a + b)
-        tol1 = sqrt_eps * np.abs(xf) + xatol / 3.0
-        tol2 = 2.0 * tol1
-
-        if disp > 2:
-            print(" ")
-            print(header)
-            print("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
-
-        # Výpočet hodnoty původní funkce pro porovnání
-        if true_min is not None and original_func is not None and map_params is not None:
-            n, x_min, x_max, y_min, y_max, whatFunc = map_params
-            point = self.map_to_area(xf, n, x_min, x_max, y_min, y_max)
-            if whatFunc == 0:
-                original_fx = self.f(*point)
-            elif whatFunc == 1:
-                original_fx = self.f1(*point)
-            else:
-                original_fx = self.f2(*point)
-        else:
-            original_fx = fx
-
-        while (true_min is None or np.abs(original_fx - true_min) >= ftol):
-            golden = 1
-            # Check for parabolic fit
-            if np.abs(e) > tol1:
-                golden = 0
-                r = (xf - nfc) * (fx - ffulc)
-                q = (xf - fulc) * (fx - fnfc)
-                p = (xf - fulc) * q - (xf - nfc) * r
-                q = 2.0 * (q - r)
-                if q > 0.0:
-                    p = -p
-                q = np.abs(q)
-                r = e
-                e = rat
-
-                # Check for acceptability of parabola
-                if ((np.abs(p) < np.abs(0.5*q*r)) and (p > q*(a - xf)) and
-                        (p < q * (b - xf))):
-                    rat = (p + 0.0) / q
-                    x = xf + rat
-                    step = '       parabolic'
-
-                    if ((x - a) < tol2) or ((b - x) < tol2):
-                        si = np.sign(xm - xf) + ((xm - xf) == 0)
-                        rat = tol1 * si
-                else:      # do a golden-section step
-                    golden = 1
-
-            if golden:  # do a golden-section step
-                if xf >= xm:
-                    e = a - xf
-                else:
-                    e = b - xf
-                rat = golden_mean*e
-                step = '       golden'
-
-            si = np.sign(rat) + (rat == 0)
-            x = xf + si * np.maximum(np.abs(rat), tol1)
-            fu = func(x, *args)
-            num += 1
-            fmin_data = (num, x, fu)
-            if disp > 2:
-                print("%5.0f   %12.6g %12.6g %s" % (fmin_data + (step,)))
-
-            if fu <= fx:
-                if x >= xf:
-                    a = xf
-                else:
-                    b = xf
-                fulc, ffulc = nfc, fnfc
-                nfc, fnfc = xf, fx
-                xf, fx = x, fu
-            else:
-                if x < xf:
-                    a = x
-                else:
-                    b = x
-                if (fu <= fnfc) or (nfc == xf):
-                    fulc, ffulc = nfc, fnfc
-                    nfc, fnfc = x, fu
-                elif (fu <= ffulc) or (fulc == xf) or (fulc == nfc):
-                    fulc, ffulc = x, fu
-
-            xm = 0.5 * (a + b)
-            tol1 = sqrt_eps * np.abs(xf) + xatol / 3.0
-            tol2 = 2.0 * tol1
-
-            # Přepočet hodnoty původní funkce pro aktuální xf
-            if true_min is not None and original_func is not None and map_params is not None:
-                n, x_min, x_max, y_min, y_max, whatFunc = map_params
-                point = self.map_to_area(xf, n, x_min, x_max, y_min, y_max)
-                if whatFunc == 0:
-                    original_fx = self.f(*point)
-                elif whatFunc == 1:
-                    original_fx = self.f1(*point)
-                else:
-                    original_fx = self.f2(*point)
-
-            if num >= maxfun:
-                flag = 1
-                break
-
-        if np.isnan(xf) or np.isnan(fx) or np.isnan(fu):
-            flag = 2
-
-        fval = fx
-        if disp > 0:
-            _endprint(x, flag, fval, maxfun, xatol, disp)
-
-        result = OptimizeResult(fun=fval, status=flag, success=(flag == 0),
-                                message={0: 'Solution found.',
-                                         1: 'Maximum number of function calls '
-                                            'reached.',
-                                         2: _status_message['nan']}.get(flag, ''),
-                                x=xf, nfev=num, nit=num)
-
-        return result
-
-
-
-
-
-    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc,true_min, ftol, maxiter=200):
-        map_params = (n, x_min, x_max, y_min, y_max, whatFunc)
-        result = self._minimize_scalar_bounded(
-            lambda t: self.F_mapped(t,n, x_min, x_max, y_min, y_max, whatFunc), 
-            bounds=(0, 1), 
-            true_min=true_min, 
-            ftol=ftol,
-            maxiter=maxiter,
-            original_func=True,
-            map_params=map_params
-        )
-        t_min = result.x
-        h_min = self.map_to_area(t_min,n, x_min, x_max, y_min, y_max)
+        t_min = float(opt.optimize([0.5])[0])
+        h_min = self.map_to_area(t_min, n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             f_min = self.f(*h_min)
         elif whatFunc == 1:
             f_min = self.f1(*h_min)
         else:
             f_min = self.f2(*h_min)
-        nfev = result.nfev  # Počet vyhodnocení funkce
+        nfev = int(opt.get_numevals())
         return t_min, h_min, f_min, nfev
-
-
-
-    def find_minimum_mapped_raw(self,n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=500):
-        """
-        Hledání minima přímo v původní funkci (bez Hilbertovy křivky).
-        Optimalizuje funkci přímo ve 2D prostoru pomocí scipy.optimize.minimize.
-        """
-        def objective(coords):
-            x, y = coords
-            if whatFunc == 0:
-                return self.f(x, y)
-            elif whatFunc == 1:
-                return self.f1(x, y)
-            else:
-                return self.f2(x, y)
-        
-        
-        iteration_count = [0]
-        def callback(xk):
-            iteration_count[0] += 1
-            if true_min is not None:
-                current_f = objective(xk)
-                if np.abs(current_f - true_min) < ftol:
-                    return True  
-            if iteration_count[0] >= maxiter:
-                return True
-            return False
-        
-        
-        x0 = [(x_min + x_max) / 2, (y_min + y_max) / 2]
-        bounds = [(x_min, x_max), (y_min, y_max)]
-        
-        
-        result = minimize(
-            objective, 
-            x0, 
-            method='L-BFGS-B',
-            bounds=bounds,
-            callback=callback,
-            options={'maxiter': maxiter, 'ftol': ftol}
-        )
-        
-        x_min_found, y_min_found = result.x
-        f_min = result.fun
-        
-        return  x_min_found, y_min_found,f_min
-
-     
 
 
 
@@ -497,8 +279,12 @@ class Hilbert2D:
 
 
 
-    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol):
+    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol, stop_condition="eps"):
         N = 2                      
+        stop_condition = stop_condition.lower()
+        if stop_condition not in {"eps", "ftol"}:
+            raise ValueError("stop_condition must be either 'eps' or 'ftol'.")
+
         # STEP 0: inicializace
         xk = [0.0, 1.0]
         zk = [self.F(0.0,n, whatFunc), self.F(1.0,n, whatFunc)]
@@ -565,7 +351,7 @@ class Hilbert2D:
                     h_k = max(m_values)
                     
                     for i in range(1, len(xk)):
-                        gamma_i = h_k * abs(xk[i] - xk[i-1]) / X_max
+                        gamma_i = h_k * abs(xk[i] - xk[i-1])**(1/N) / X_max
                         gamma_values.append(gamma_i)
                     
                     # Výpočet hi = max{λi, γi, ξ}
@@ -685,12 +471,21 @@ class Hilbert2D:
             else:
                 f_current = self.f2_square(x_current, y_current)
             
-            # Kontrola přesnosti od skutečného minima
-            if true_min is not None and abs(f_current - true_min) < ftol:
-                print(f"Algorithm stopped after {iteracni_krok} iterations - desired accuracy achieved.")
-                break
-
+            if stop_condition == "ftol":
+                if abs(f_current - true_min) < ftol:
+                    print(f"Algorithm stopped after {iteracni_krok + 1} iterations - ftol condition satisfied.")
+                    break
+            else:
+                if len(xk) > 1:
+                    nejjemnejsi_interval = min(
+                        abs(xk[i] - xk[i - 1]) ** (1 / N)
+                        for i in range(1, len(xk))
+                    )
+                    if nejjemnejsi_interval < eps:
+                        print(f"Algorithm stopped after {iteracni_krok + 1} iterations - smallest interval below threshold.")
+                        break
            
+
             xk.append(y_star)
             zk.append(self.F(y_star, n, whatFunc))
             k += 1

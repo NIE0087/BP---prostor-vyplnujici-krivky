@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 import seaborn as sns
 import matplotlib.patches as patches
@@ -11,6 +10,76 @@ from Hilbert2Dmainstream import Hilbert2Dmainstream
 class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
     def __init__(self, precision: int):
         super().__init__(precision)
+
+    def compute_holder_table_values(
+        self,
+        n_values,
+        whatFunc=0,
+        H=-2,
+        I=2,
+        r=3,
+        eps=1e-6,
+        max_iter=1000,
+        ftol=1e-6,
+        true_min=None,
+        true_point=None,
+        print_table=True
+    ):
+        if not n_values:
+            raise ValueError("n_values nesmí být prázdné")
+
+        if whatFunc == 0:
+            if true_min is None:
+                true_min = 1.0
+            if true_point is None:
+                true_point = (0.3, 0.7)
+        else:
+            if true_min is None or true_point is None:
+                raise ValueError("Pro whatFunc != 0 je potřeba zadat true_min i true_point")
+
+        y_star = np.asarray(true_point, dtype=float)
+        if y_star.shape != (2,):
+            raise ValueError("true_point musí být dvojice souřadnic (x*, y*)")
+
+        rows = []
+        for n in n_values:
+            _, f_min, x_min, y_min, _ = self.Holder_algorithm_mapped(
+                H, I, r, eps, max_iter, n, whatFunc, true_min, ftol
+            )
+
+            y_m = np.array([x_min, y_min], dtype=float)
+            f_diff = float(f_min - true_min)
+            distance = float(np.linalg.norm(y_m - y_star))
+
+            rows.append({
+                "n": int(n),
+                "f_diff": f_diff,
+                "y_x": float(x_min),
+                "y_y": float(y_min),
+                "distance": distance
+            })
+
+        df = pd.DataFrame(rows)
+
+        if print_table:
+            print(df.to_string(index=False))
+
+        return df
+
+    def holder_table_simple(self, n_values):
+        return self.compute_holder_table_values(
+            n_values=n_values,
+            whatFunc=0,
+            H=-2,
+            I=2,
+            r=3,
+            eps=1e-6,
+            max_iter=1000,
+            ftol=1e-6,
+            true_min=1.0,
+            true_point=(0.3, 0.7),
+            print_table=True
+        )
 
 
 
@@ -204,17 +273,28 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
             plt.show()
 
 
-    def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol, I=2):
+    def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol=None, I=2):
        
-        if not isinstance(ftol, list):
-            ftol_list = [ftol]
+        if isinstance(eps, (list, tuple, np.ndarray)):
+            eps_list = list(eps)
         else:
-            ftol_list = ftol
-            
+            eps_list = [eps]
+
+        if ftol is None:
+            ftol_list = eps_list.copy()
+        elif isinstance(ftol, (list, tuple, np.ndarray)):
+            ftol_list = list(ftol)
+            if len(ftol_list) == 1 and len(eps_list) > 1:
+                ftol_list = ftol_list * len(eps_list)
+            elif len(ftol_list) != len(eps_list):
+                raise ValueError("ftol musí mít stejný počet hodnot jako eps (nebo jen jednu hodnotu).")
+        else:
+            ftol_list = [ftol] * len(eps_list)
+
         results = []
         
-        # Testování pro každou přesnost ftol
-        for tol in ftol_list:
+        # Testování pro každou přesnost eps
+        for eps_val, ftol_val in zip(eps_list, ftol_list):
          
             
             for n in n_vals:
@@ -223,7 +303,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
               
                
                 _, f_min_exact, _, _, usedH_exact = self.Holder_algorithm_mapped(
-                    H_exact, I, r, eps, max_iter, n, whatFunc, true_min, ftol=tol
+                    H_exact, I, r, eps_val, max_iter, n, whatFunc, true_min, ftol=ftol_val, stop_condition="eps"
                 )
                 iter_exact = len(usedH_exact)
                 error_exact = abs(f_min_exact - true_min)
@@ -232,7 +312,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                 
            
                 _, f_min_h1, _, _, usedH_h1 = self.Holder_algorithm_mapped(
-                    -1, I, r, eps, max_iter, n, whatFunc, true_min, ftol=tol
+                    -1, I, r, eps_val, max_iter, n, whatFunc, true_min, ftol=ftol_val, stop_condition="eps"
                 )
                 iter_h1 = len(usedH_h1)
                 error_h1 = abs(f_min_h1 - true_min)
@@ -241,7 +321,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                 
             
                 _, f_min_h2, _, _, usedH_h2 = self.Holder_algorithm_mapped(
-                    -2, I, r, eps, max_iter, n, whatFunc, true_min, ftol=tol
+                    -2, I, r, eps_val, max_iter, n, whatFunc, true_min, ftol=ftol_val, stop_condition="eps"
                 )
                 iter_h2 = len(usedH_h2)
                 error_h2 = abs(f_min_h2 - true_min)
@@ -250,7 +330,8 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                 
                 # Uložení výsledků
                 results.append({
-                    'ftol': tol,
+                    'eps': eps_val,
+                    'ftol_used': ftol_val,
                     'n': n,
                     'H_exact_iter': iter_exact,
                     'H_exact_error': error_exact,
@@ -264,25 +345,25 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         df = pd.DataFrame(results)
         
         # Vykreslení grafů
-        self._plot_H_comparison(df, n_vals, ftol_list)
+        self._plot_H_comparison(df, n_vals, eps_list)
         
         return df
     
     
-    def _plot_H_comparison(self, df, n_vals, ftol_list):
+    def _plot_H_comparison(self, df, n_vals, eps_list):
         """
         Pomocná funkce pro vykreslení výsledků porovnání H aproximací.
         """
-        num_ftol = len(ftol_list)
+        num_eps = len(eps_list)
         
         # Graf 1: Počet iterací vs n pro různé H
-        fig1, axes1 = plt.subplots(1, num_ftol, figsize=(8*num_ftol, 6.5))
-        if num_ftol == 1:
+        fig1, axes1 = plt.subplots(1, num_eps, figsize=(8*num_eps, 6.5))
+        if num_eps == 1:
             axes1 = [axes1]
         
-        for idx, tol in enumerate(ftol_list):
+        for idx, eps_val in enumerate(eps_list):
             ax = axes1[idx]
-            df_tol = df[df['ftol'] == tol]
+            df_tol = df[df['eps'] == eps_val]
             
             n_arr = df_tol['n'].to_numpy()
             h_exact_iter = df_tol['H_exact_iter'].to_numpy()
@@ -295,7 +376,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
             
             ax.set_xlabel('Řád Hilbertovy křivky (n)', fontsize=12)
             ax.set_ylabel('Počet iterací', fontsize=12)
-            ax.set_title(f'Počet iterací pro ftol={tol}', fontsize=13)
+            ax.set_title(f'Počet iterací pro eps={eps_val}', fontsize=13)
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.3)
         
@@ -303,13 +384,13 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         plt.show()
         
         # Graf 2: Chyba vs n pro různé H
-        fig2, axes2 = plt.subplots(1, num_ftol, figsize=(8*num_ftol, 6.5))
-        if num_ftol == 1:
+        fig2, axes2 = plt.subplots(1, num_eps, figsize=(8*num_eps, 6.5))
+        if num_eps == 1:
             axes2 = [axes2]
         
-        for idx, tol in enumerate(ftol_list):
+        for idx, eps_val in enumerate(eps_list):
             ax = axes2[idx]
-            df_tol = df[df['ftol'] == tol]
+            df_tol = df[df['eps'] == eps_val]
             
             n_arr = df_tol['n'].to_numpy()
             h_exact_error = df_tol['H_exact_error'].to_numpy()
@@ -322,11 +403,11 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
             
             ax.set_xlabel('Řád Hilbertovy křivky (n)', fontsize=12)
             ax.set_ylabel('Chyba |f_min - true_min|', fontsize=12)
-            ax.set_title(f'Chyba pro ftol={tol}', fontsize=13)
+            ax.set_title(f'Chyba pro eps={eps_val}', fontsize=13)
             ax.set_yscale('log')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.3, which='both')
-            ax.axhline(y=tol, color='r', linestyle='--', alpha=0.5, label=f'ftol={tol}')
+            ax.axhline(y=eps_val, color='r', linestyle='--', alpha=0.5, label=f'eps={eps_val}')
         
         plt.tight_layout()
         plt.show()
@@ -646,7 +727,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         curve_points = np.array(curve_points)
         f_dense = [self.F_mapped(t, n, x_min, x_max, y_min, y_max, whatFunc) for t in t_values]
         
-        ax1.plot(t_values, f_dense, 'b-', alpha=0.7, label='F(t) na Hilbertově křivce')
+        ax1.plot(t_values, f_dense, 'b-', alpha=0.7, label='g(x)')
         ax1.scatter(xk, zk, color='red', s=50, zorder=5, label='Známé body')
         
     
@@ -678,12 +759,12 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
             color = colors[i % len(colors)]
             
             ax1.plot(t_interval, parab1, '--', color=color, alpha=0.9, linewidth=2,
-                    label=f'$ri_n$ (z bodu {i-1})' if i <= 3 else '')
+                    label=f'$li_n$ (z bodu {i-1})' if i <= 3 else '')
             ax1.plot(t_interval, parab2, ':', color=color, alpha=0.9, linewidth=2)
             
           
             ax1.plot(t_interval, line1, '-', color='darkgray', alpha=0.7, linewidth=1,
-                    label='$li_n$' if i == 1 else '')
+                    label='$ri_n$' if i == 1 else '')
             ax1.plot(t_interval, line2, '-', color='darkgray', alpha=0.7, linewidth=1)
             
          
@@ -695,7 +776,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                               z2 - r*h_used * abs(x2 - y_intersect)**(1/N))
                 
                 ax1.scatter([y_intersect], [z_intersect], color=color, s=100, marker='x', zorder=10, 
-                           label='F(yi)' if i == 1 else '')
+                           label='g(yi)' if i == 1 else '')
              
                 ax1.scatter([y_intersect], [Mi_value], color='pink', s=80, marker='o', zorder=15,
                            label='Mi' if i == 1 else '')
@@ -703,8 +784,8 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                 ax1.axvline(x=y_intersect, color=color, linestyle=':', alpha=0.6, linewidth=1)
         
         ax1.set_xlabel('t')
-        ax1.set_ylabel('F(t)')
-        ax1.set_title(f'Iterace {iteration} (Mainstream Hilbert)')
+        ax1.set_ylabel('g(x)')
+        ax1.set_title(f'Iterace {iteration}')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         
@@ -741,7 +822,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         
         ax2.set_xlabel('x')
         ax2.set_ylabel('y')
-        ax2.set_title(f'Iterace {iteration}: Body v 2D prostoru (Mainstream)')
+        ax2.set_title(f'Iterace {iteration}: Body v 2D prostoru')
         ax2.grid(True, alpha=0.3)
         ax2.set_xlim(x_min, x_max)
         ax2.set_ylim(y_min, y_max)

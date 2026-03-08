@@ -3,7 +3,6 @@ import numpy as np
 from scipy.optimize import minimize_scalar, differential_evolution, OptimizeResult, minimize
 from math import sqrt
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as patches
 import pandas as pd
 import seaborn as sns
@@ -263,9 +262,13 @@ class Hilbert2Dmainstream:
     def _minimize_scalar_bounded(self, func, bounds, true_min, args=(),
                              xatol=1e-5, ftol=1e-6, maxiter=200, disp=0,
                              original_func=None, map_params=None,
-                             **unknown_options):
+                             stop_condition="xatol", **unknown_options):
  
         _check_unknown_options(unknown_options)
+        stop_condition = stop_condition.lower()
+        if stop_condition not in {"auto", "xatol", "ftol"}:
+            raise ValueError("stop_condition must be 'auto', 'xatol', or 'ftol'.")
+      
         maxfun = maxiter
         # Test bounds are of correct form
         if len(bounds) != 2:
@@ -317,7 +320,14 @@ class Hilbert2Dmainstream:
         else:
             original_fx = fx
 
-        while (true_min is None or np.abs(original_fx - true_min) >= ftol):
+        while True:
+            if stop_condition == "xatol":
+                if np.abs(xf - xm) <= (tol2 - 0.5 * (b - a)):
+                    break
+            else:  # stop_condition == "ftol"
+                if np.abs(original_fx - true_min) < ftol:
+                    break
+
             golden = 1
             # Check for parabolic fit
             if np.abs(e) > tol1:
@@ -419,7 +429,7 @@ class Hilbert2Dmainstream:
 
 
 
-    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc,true_min, ftol, maxiter=200):
+    def find_minimum_mapped(self,n, x_min, x_max, y_min, y_max, whatFunc,true_min, ftol, maxiter=200, stop_condition="xatol"):
         map_params = (n, x_min, x_max, y_min, y_max, whatFunc)
         result = self._minimize_scalar_bounded(
             lambda t: self.F_mapped(t,n, x_min, x_max, y_min, y_max, whatFunc), 
@@ -428,7 +438,8 @@ class Hilbert2Dmainstream:
             ftol=ftol,
             maxiter=maxiter,
             original_func=True,
-            map_params=map_params
+            map_params=map_params,
+            stop_condition=stop_condition
         )
         t_min = result.x
         h_min = self.map_to_area(t_min,n, x_min, x_max, y_min, y_max)
@@ -481,8 +492,14 @@ class Hilbert2Dmainstream:
 
 
 
-    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol):
+    def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol, stop_condition="eps"):
         N = 2                      
+        stop_condition = stop_condition.lower()
+        if stop_condition not in {"eps", "ftol"}:
+            raise ValueError("stop_condition must be either 'eps' or 'ftol'.")
+        if stop_condition == "ftol" and true_min is None:
+            raise ValueError("true_min must be provided when stop_condition='ftol'.")
+
         # STEP 0: inicializace
         xk = [0.0, 1.0]
         zk = [self.F(0.0,n, whatFunc), self.F(1.0,n, whatFunc)]
@@ -669,10 +686,19 @@ class Hilbert2Dmainstream:
             else:
                 f_current = self.f2_square(x_current, y_current)
             
-            # Kontrola přesnosti od skutečného minima
-            if true_min is not None and abs(f_current - true_min) < ftol:
-                print(f"Algorithm stopped after {iteracni_krok} iterations - desired accuracy achieved.")
-                break
+            if stop_condition == "ftol":
+                if abs(f_current - true_min) < ftol:
+                    print(f"Algorithm stopped after {iteracni_krok + 1} iterations - ftol condition satisfied.")
+                    break
+            else:
+                if len(xk) > 1:
+                    nejjemnejsi_interval = min(
+                        abs(xk[i] - xk[i - 1]) ** (1 / N)
+                        for i in range(1, len(xk))
+                    )
+                    if nejjemnejsi_interval < eps:
+                        print(f"Algorithm stopped after {iteracni_krok + 1} iterations - smallest interval below threshold.")
+                        break
 
            
             xk.append(y_star)
