@@ -1,8 +1,32 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.patches as patches
+
+
+def _ensure_mplot3d_registration():
+    """Force mplot3d import from the same site-packages tree as matplotlib."""
+    try:
+        from mpl_toolkits.mplot3d import Axes3D
+    except Exception:
+        import mpl_toolkits
+
+        local_pkg = os.path.join(os.path.dirname(os.path.dirname(matplotlib.__file__)), "mpl_toolkits")
+        if os.path.isdir(local_pkg):
+            current_paths = list(getattr(mpl_toolkits, "__path__", []))
+            mpl_toolkits.__path__ = [local_pkg] + [p for p in current_paths if p != local_pkg]
+
+        from mpl_toolkits.mplot3d import Axes3D
+
+    # Matplotlib may skip auto-registration after an early import failure.
+    from matplotlib.projections import register_projection
+    register_projection(Axes3D)
+
+
+_ensure_mplot3d_registration()
 
 from Hilbert2Dmainstream import Hilbert2Dmainstream
 
@@ -533,6 +557,53 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         plt.tight_layout()
         plt.show()
 
+    def compare_holder_variants_iterations(self, r, eps, max_iter, N_vals, whatFunc, true_min):
+        """
+        Porovna ruzne varianty Holderova algoritmu:
+        H=-1 vs H=-2 a I=1 vs I=2.
+        Na ose y je pocet provedenych iteraci algoritmu.
+        """
+        variants = [
+            ("H=-1, I=1", -1, 1),
+            ("H=-1, I=2", -1, 2),
+            ("H=-2, I=1", -2, 1),
+            ("H=-2, I=2", -2, 2)
+        ]
+
+        results = {name: [] for name, _, _ in variants}
+        n_values = []
+
+        for n in N_vals:
+            n_values.append(n)
+            for name, H, I in variants:
+                _, _, _, _, usedH_arr = self.Holder_algorithm_mapped(
+                    H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps
+                )
+                results[name].append(len(usedH_arr))
+
+        plt.figure(figsize=(10, 6))
+        colors = ['blue', 'red', 'green', 'orange']
+        markers = ['o', 's', '^', 'v']
+
+        for i, (name, _, _) in enumerate(variants):
+            plt.plot(
+                n_values,
+                results[name],
+                color=colors[i],
+                marker=markers[i],
+                label=name,
+                linewidth=2,
+                markersize=4
+            )
+
+        plt.xlabel("Iterace Hilbertovy krivky (n)")
+        plt.ylabel("Pocet iteraci algoritmu")
+        plt.title("Porovnani variant Holderova algoritmu podle poctu iteraci", fontsize=14)
+        plt.grid(True, which="both", ls="-", alpha=0.3)
+        plt.legend(fontsize=10, frameon=True, fancybox=True)
+        plt.tight_layout()
+        plt.show()
+
 
     def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, whatFunc, true_min):
        
@@ -545,7 +616,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                 _, f_min, _, _, _ = self.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps)
                 diff = abs(f_min - true_min)
                 results[f"r={r}"].append(diff)
-        
+
         # Vykreslí graf
         plt.figure(figsize=(12, 8))
         colors = plt.cm.viridis(np.linspace(0, 1, len(r_values)))
@@ -875,9 +946,12 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         
         curve_points = np.array(curve_points)
         
-        # Nastavení z-souřadnice křivky na minimum grafu
-        z_min = np.min(Z)
-        z_curve = np.full(len(curve_points), z_min)
+        # Posun křivky níž pod povrch, aby byl graf funkce vizuálně výš.
+        z_min = float(np.min(Z))
+        z_max = float(np.max(Z))
+        z_gap = max(0.35 * (z_max - z_min), 0.15)
+        z_curve_level = z_min - z_gap
+        z_curve = np.full(len(curve_points), z_curve_level)
         
         # Vykreslení Hilbertovy křivky v základně
         ax.plot(curve_points[:, 0], curve_points[:, 1], z_curve, 
@@ -908,11 +982,10 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                                                      grid_points=50, curve_samples=1000,
                                                      title="Funkce s Hilbertovou křivkou a optimalizací",
                                                      true_min=None, ftol=1e-5):
-    
+        
         x_min, x_max = x_range
         y_min, y_max = y_range
-        flag=0
-        side_flag = 0
+
         # Vytvoření mřížky pro povrch
         x = np.linspace(x_min, x_max, grid_points)
         y = np.linspace(y_min, y_max, grid_points)
@@ -923,131 +996,6 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         for i in range(grid_points):
             for j in range(grid_points):
                 Z[i, j] = func(X[i, j], Y[i, j])
-        
-        # Spuštění Hölderova algoritmu - potřebujeme zachytit testované body
-        # Upravíme algoritmus aby vracel historii bodů
-        N = 2  # dimenze pro 2D
-        xk = [0.0, 1.0]
-        
-        # Wrapper funkce pro optimalizaci
-        def F_wrapper(t):
-            point = self.mainstream_hilbert_polygon_point(t, n)
-            px, py = point
-            return func(px, py)
-        
-        zk = [F_wrapper(0.0), F_wrapper(1.0)]
-        k = 2
-        
-        # Historie všech testovaných bodů
-        t_history = [0.0, 1.0]
-        
-        for iteracni_krok in range(max_iter):
-            # STEP 1: seřazení bodů
-            xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
-            
-            # STEP 2: odhad Hölderovy konstanty
-            if H == -1:
-                hvalues = []
-                for i in range(1, len(xk)):
-                    diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-                    hvalues.append(diff)
-                h_hat = max(hvalues) if hvalues else 1e-8
-                h_used = [max(h_hat, 1e-8)] * len(hvalues)
-            else:
-                h_value = H
-                h_used = [h_value] * (len(xk) - 1)
-            
-            # STEP 3: výpočet průsečíků a M_i
-            Mi = []
-            yi = []
-            for i in range(1, len(xk)):
-                h_i = max(h_used[i-1], 1e-8)
-                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_i*(xk[i]-xk[i-1])**((1-N)/N))
-                yi.append(y)
-                Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), 
-                             zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
-            
-            # STEP 4: výběr intervalu
-             #----------- SELECT(2) ------------
-
-                # Initialize idx with standard selection
-            idx = np.argmin(Mi)
-                
-                # Update imin - index odpovídající současnému odhadu minimální hodnoty
-            current_imin = np.argmin(zk)
-                
-                
-            if flag == 1:
-                if len(zk) > 1 and zk[-1] < zk[imin]:  
-                    imin = len(zk) - 1
-                        
-                # Local improvement: Alternate the choice of interval
-                delta = 1e-5 
-                    
-                    # Local improvement logic around imin
-                if imin >= 1 and imin < len(xk)-1:
-                       
-                        left_size = abs(xk[imin] - xk[imin-1]) if imin > 0 else 0
-                        right_size = abs(xk[imin+1] - xk[imin]) if imin+1 < len(xk) else 0
-                        
-                        # Výběr intervalu podle velikosti a delta - střídání mezi right a left
-                        
-                        if side_flag == 0:  # nejprve right
-                            if right_size > delta and imin < len(Mi):
-                                t_choice = imin 
-                            elif left_size > delta and imin-1 < len(Mi):
-                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
-                            else:
-                                t_choice = np.argmin(Mi)  # standardní výběr
-                        else: 
-                            if left_size > delta and imin-1 < len(Mi):
-                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
-                            elif right_size > delta and imin < len(Mi):
-                                t_choice = imin 
-                            else:
-                                t_choice = np.argmin(Mi)  # standardní výběr
-                        
-                        
-                        side_flag = 1 - side_flag
-                            
-                        # Ověření platnosti výběru
-                        if 0 <= t_choice < len(Mi):
-                            interval_size = abs(xk[t_choice+1] - xk[t_choice])
-                            if interval_size > delta:
-                                idx = t_choice
-                    
-                    # Update flag
-                flag = 0  
-            else:
-                    # Reset flag and use standard selection
-                    flag = 1  
-                    idx= np.argmin(Mi)
-                    imin = current_imin  # Update imin
-                
-            y_star = yi[idx]
-            
-            # STEP 5: zastavovací podmínka
-            min_idx = np.argmin(zk)
-            t_current = xk[min_idx]
-            
-            # Výpočet bodu na křivce a hodnoty funkce
-            point_current = self.mainstream_hilbert_polygon_point(t_current, n)
-            px_current, py_current = point_current
-            f_current = func(px_current, py_current)
-            
-            # Kontrola přesnosti od skutečného minima
-            if true_min is not None and abs(f_current - true_min) < ftol:
-                print(f"Algoritmus zastaven po {iteracni_krok} iteracích - dosaženo požadované přesnosti.")
-                break
-            
-            xk.append(y_star)
-            zk.append(F_wrapper(y_star))
-            t_history.append(y_star)
-            k += 1
-        
-        # Najití minima
-        min_idx = np.argmin(zk)
-        t_min = xk[min_idx]
         
         # Vytvoření 3D grafu
         fig = plt.figure(figsize=(14, 10))
@@ -1066,75 +1014,67 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
             curve_points.append([px, py])
         
         curve_points = np.array(curve_points)
-        z_min_surface = np.min(Z)
-        z_curve = np.full(len(curve_points), z_min_surface)
+        z_min_surface = float(np.min(Z))
+        z_max_surface = float(np.max(Z))
+        z_gap = max(0.35 * (z_max_surface - z_min_surface), 0.15)
+        z_curve_level = z_min_surface - z_gap
+        z_curve = np.full(len(curve_points), z_curve_level)
         
         # Vykreslení Hilbertovy křivky v základně
         ax.plot(curve_points[:, 0], curve_points[:, 1], z_curve, 
                'purple', linewidth=2, label='Hilbertova křivka', alpha=0.8)
-        
-        # Vykreslení testovaných bodů z algoritmu
-        opt_points_2d = []
-        opt_points_z = []
-        
-        for t in t_history:
-            point = self.mainstream_hilbert_polygon_point(t, n)
-            px, py = point
-            z_val = func(px, py)
-            opt_points_2d.append([px, py])
-            opt_points_z.append(z_val)
-        
-        opt_points_2d = np.array(opt_points_2d)
-        opt_points_z = np.array(opt_points_z)
-        
-        # Vykreslení bodů na křivce v základně
-        z_points_base = np.full(len(opt_points_2d), z_min_surface)
-        ax.scatter(opt_points_2d[:, 0], opt_points_2d[:, 1], z_points_base,
-                  c='cyan', s=50, marker='o', label='Testované body (křivka)', 
-                  edgecolors='black', linewidths=1, alpha=0.9)
-        
-        # Vykreslení bodů na povrchu funkce
-        ax.scatter(opt_points_2d[:, 0], opt_points_2d[:, 1], opt_points_z,
-                  c='red', s=50, marker='o', label='Testované body (funkce)',
-                  edgecolors='black', linewidths=1, alpha=0.9)
-        
-        # Spojnice mezi body na křivce a na povrchu
-        for i in range(len(opt_points_2d)):
-            ax.plot([opt_points_2d[i, 0], opt_points_2d[i, 0]],
-                   [opt_points_2d[i, 1], opt_points_2d[i, 1]],
-                   [z_points_base[i], opt_points_z[i]],
-                   'orange', linewidth=1.5, alpha=0.6)
-        
-        # Zvýraznění nalezeného minima
-        point_min = self.mainstream_hilbert_polygon_point(t_min, n)
-        px_min, py_min = point_min
-        z_min_val = func(px_min, py_min)
-        
-        ax.scatter([px_min], [py_min], [z_min_val],
-                  c='lime', s=200, marker='*', label='Nalezené minimum',
-                  edgecolors='black', linewidths=2, zorder=5)
-        
-        ax.plot([px_min, px_min], [py_min, py_min],
-               [z_min_surface, z_min_val],
-               'lime', linewidth=3, alpha=0.9)
+
+        # Najdi finalni bod Holderova algoritmu (bez vykreslovani mezibodu).
+        original_F = self.F
+        usedH_arr = []
+        t_holder = float('nan')
+        try:
+            def custom_F(t, _n, _whatFunc):
+                px, py = self.mainstream_hilbert_polygon_point(t, n)
+                new_x = x_min + (x_max - x_min) * px
+                new_y = y_min + (y_max - y_min) * py
+                return func(new_x, new_y)
+
+            self.F = custom_F
+            stop_condition = "ftol" if true_min is not None else "eps"
+            t_holder, _, _, _, usedH_arr = self.Holder_algorithm_mapped(
+                H=H,
+                I=2,
+                r=r,
+                eps=eps,
+                max_iter=max_iter,
+                n=n,
+                whatFunc=0,
+                true_min=true_min,
+                ftol=ftol,
+                stop_condition=stop_condition,
+            )
+        finally:
+            self.F = original_F
+
+        px_alg, py_alg = self.mainstream_hilbert_polygon_point(t_holder, n)
+        x_alg = x_min + (x_max - x_min) * px_alg
+        y_alg = y_min + (y_max - y_min) * py_alg
+        z_alg = float(func(x_alg, y_alg))
+
+        ax.plot([x_alg, x_alg], [y_alg, y_alg], [z_curve_level, z_alg],
+                color='orange', linewidth=2.5, alpha=0.95, label='Spojnice k výsledku Hölder')
+
+        t_min = float(t_holder)
+        z_min_val = z_alg
         
         # Nastavení os a popisků
         ax.set_xlabel('x', fontsize=12)
         ax.set_ylabel('y', fontsize=12)
         ax.set_zlabel('f(x, y)', fontsize=12)
-        ax.set_title(f"{title}\n(Testováno bodů: {len(t_history)}, Minimum: f={z_min_val:.6f})", 
-                    fontsize=14, pad=20)
         
-        # Přidání colorbar
-        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
         
         # Nastavení úhlu pohledu
         ax.view_init(elev=25, azim=45)
         
-        # Legenda
-        ax.legend(loc='upper left', fontsize=10)
+        
         
         plt.tight_layout()
         plt.show()
         
-        return fig, ax, t_min, z_min_val, len(t_history)
+        return fig, ax, t_min, z_min_val, len(usedH_arr) + 2
