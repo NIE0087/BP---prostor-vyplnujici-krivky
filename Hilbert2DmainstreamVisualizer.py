@@ -114,29 +114,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         
         results = {}
         
-        # 1. Minimize Scalar (Brent's method)
-        
-        try:
-            t_min, h_min, f_min, nfev = self.find_minimum_mapped(
-                n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter
-            )
-            x_mapped, y_mapped = h_min
-            results['minimize_scalar'] = {
-                'iterations': nfev,
-                'f_min': f_min,
-                'x': x_mapped,
-                'y': y_mapped,
-                'success': True
-            }
-        except Exception as e:
-            results['minimize_scalar'] = {
-                'iterations': None,
-                'f_min': None,
-                'success': False,
-                'error': str(e)
-            }
-        
-        # 2. Differential Evolution
+        # Differential Evolution
        
         try:
             f_min, x_mapped, y_mapped, generations, nfev = self.differential_evolution_mapped(
@@ -213,7 +191,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         table_data = []
         for n in n_values:
             row = {'n': n}
-            for method in ['minimize_scalar', 'differential_evolution', 'holder']:
+            for method in ['differential_evolution', 'holder']:
                 if all_results[n][method]['success']:
                     row[method] = all_results[n][method]['iterations']
                 else:
@@ -222,12 +200,12 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         
         # Vytvoření pandas DataFrame pro hezčí výpis
         df = pd.DataFrame(table_data)
-        df.columns = ['n', 'Minimize Scalar', 'Diff. Evolution', 'Holder']
+        df.columns = ['n', 'Diff. Evolution', 'Holder']
         print(df.to_string(index=False))
         
        
         
-        for method in ['minimize_scalar', 'differential_evolution', 'holder']:
+        for method in ['differential_evolution', 'holder']:
             method_name = method.replace('_', ' ').title()
             iterations = [all_results[n][method]['iterations'] 
                          for n in n_values 
@@ -644,26 +622,6 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         plt.tight_layout()
         plt.show()
 
-
-    
-    def analyze_holder_constants(self, H_true,I,H, r, eps, max_iter, N_vals, whatFunc):
-    
-        results = []
-        
-        for n in N_vals:
-            _, _, _, _, usedH_arr = self.Holder_algorithm_mapped(H,I, r, eps, max_iter, n, whatFunc, true_min=None, ftol=eps)
-            
-            if usedH_arr:
-                h_final = usedH_arr[-1]
-                h_mean = np.mean(usedH_arr)
-                results.append([n, H_true, h_mean, h_final])
-            else:
-                results.append([n, H_true, 0, 0])
-        
-        df = pd.DataFrame(results, columns=["n", "H opravdové", "H průměr", "H finální"])
-        print(df)
-        
-        return df
     
 
 

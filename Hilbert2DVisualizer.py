@@ -115,29 +115,7 @@ class Hilbert2DVisualizer:
         
         results = {}
         
-        # 1. NLOPT DIRECT on Hilbert-mapped 1D objective
-        
-        try:
-            t_min, h_min, f_min, nfev = self.hilbert.find_minimum_mapped(
-                n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter
-            )
-            x_mapped, y_mapped = h_min
-            results['nlopt_direct'] = {
-                'iterations': nfev,
-                'f_min': f_min,
-                'x': x_mapped,
-                'y': y_mapped,
-                'success': True
-            }
-        except Exception as e:
-            results['nlopt_direct'] = {
-                'iterations': None,
-                'f_min': None,
-                'success': False,
-                'error': str(e)
-            }
-        
-        # 2. Differential Evolution
+        # 1. Differential Evolution
        
         try:
             f_min, x_mapped, y_mapped, generations, nfev = self.hilbert.differential_evolution_mapped(
@@ -214,7 +192,7 @@ class Hilbert2DVisualizer:
         table_data = []
         for n in n_values:
             row = {'n': n}
-            for method in ['nlopt_direct', 'differential_evolution', 'holder']:
+            for method in ['differential_evolution', 'holder']:
                 if all_results[n][method]['success']:
                     row[method] = all_results[n][method]['iterations']
                 else:
@@ -223,12 +201,12 @@ class Hilbert2DVisualizer:
         
         # Vytvoření pandas DataFrame pro hezčí výpis
         df = pd.DataFrame(table_data)
-        df.columns = ['n', 'NLOPT DIRECT', 'Diff. Evolution', 'Holder']
+        df.columns = ['n', 'Diff. Evolution', 'Holder']
         print(df.to_string(index=False))
         
        
         
-        for method in ['nlopt_direct', 'differential_evolution', 'holder']:
+        for method in ['differential_evolution', 'holder']:
             method_name = method.replace('_', ' ').title()
             iterations = [all_results[n][method]['iterations'] 
                          for n in n_values 
@@ -550,23 +528,22 @@ class Hilbert2DVisualizer:
             _, f_m, _, _, _ = self.hilbert.Holder_algorithm_mapped(H, I, r, eps, max_iter, n, whatFunc, true_min, ftol=eps, stop_condition=stop_condition)
             diff_m = abs(f_m - true_min)
 
-       
-            _,_,f_nm,_ = self.hilbert.find_minimum_mapped(
-                n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=eps, maxiter=max_iter
+            f_de, _, _, _, _ = self.hilbert.differential_evolution_mapped(
+                x_min, x_max, y_min, y_max, whatFunc, true_min=true_min, ftol=eps, maxiter=max_iter
             )
-            diff_nm = abs(f_nm - true_min)
+            diff_de = abs(f_de - true_min)
             
-            results.append([n, f_m, diff_m, f_nm, diff_nm])
+            results.append([n, f_m, diff_m, f_de, diff_de])
 
-        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota NLOPT", "Rozdíl NLOPT"])
-        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl NLOPT"]])
+        df = pd.DataFrame(results, columns=["Iterace n", "Hodnota Hoelder", "Rozdíl Hoelder", "Hodnota DiffEvolution", "Rozdíl DiffEvolution"])
+        print(df[["Iterace n", "Rozdíl Hoelder", "Rozdíl DiffEvolution"]])
         n_arr = df["Iterace n"].to_numpy()
         holder_arr = df["Rozdíl Hoelder"].to_numpy()
-        scipy_arr = df["Rozdíl NLOPT"].to_numpy()
+        de_arr = df["Rozdíl DiffEvolution"].to_numpy()
         
         plt.figure(figsize=(10, 6))
         plt.plot(n_arr, holder_arr, 'o-', label="Hölder algoritmus")
-        plt.plot(n_arr, scipy_arr, 's-', label="NLOPT DIRECT (Hilbert)")
+        plt.plot(n_arr, de_arr, 's-', label="Differential Evolution")
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
         plt.title("Porovnání optimalizačních algoritmů")

@@ -6,12 +6,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import pandas as pd
 import seaborn as sns
-try:
-    import nlopt
-except ImportError:
-    nlopt = None
-
-
 class Hilbert2D:
 
     def __init__(self, precision: int):
@@ -122,7 +116,8 @@ class Hilbert2D:
     @staticmethod
     def f1(x, y):
         #return (x + 2*y - 7)**2 + (y + 2*x - 5)**2
-        return np.sin(x + y) + (x - y)**2 - 1.5 * x + 2.5 * y + 1
+        a, b, c, r, s, t = 1, 5.1/(4*np.pi**2), 5/np.pi, 6, 10, 1/(8*np.pi)
+        return a * (y - b*x**2 + c*x - r)**2 + s*(1 - t)*np.cos(x) + s
         #return (1.5 - x + x*y)**2 + (2.25 - x + x*y**2)**2 + (2.625 - x + x*y**3)**2
     
 
@@ -139,10 +134,10 @@ class Hilbert2D:
 
     @staticmethod
     def f1_square(x, y):
-        x_min=-1.5
-        x_max=4.5
-        y_min=-3
-        y_max=4.5
+        x_min=-5
+        x_max=10
+        y_min=0
+        y_max=15
        
         u = x_min + x * (x_max - x_min)
         v = y_min + y * (y_max - y_min)
@@ -206,36 +201,35 @@ class Hilbert2D:
 #################################################################
 
     def find_minimum_mapped(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter=200):
-        if nlopt is None:
-            raise ImportError("Package 'nlopt' is required for find_minimum_mapped. Install it with: pip install nlopt")
-
         if true_min is None:
-            raise ValueError("true_min must be provided for ftol stopping in NLOPT.")
+            raise ValueError("true_min must be provided.")
 
         if ftol <= 0:
             raise ValueError("ftol must be positive.")
 
-        def objective(x, grad):
-            return self.F_mapped(x[0], n, x_min, x_max, y_min, y_max, whatFunc)
+        if maxiter <= 0:
+            raise ValueError("maxiter must be positive.")
 
-        opt = nlopt.opt(nlopt.GN_DIRECT, 1)
-        opt.set_lower_bounds([0.0])
-        opt.set_upper_bounds([1.0])
-        opt.set_min_objective(objective)
-        opt.set_maxeval(maxiter)
-        # Stop as soon as the objective reaches the target band around known true minimum.
-        # For minimization this corresponds to |f - true_min| < ftol when f >= true_min.
-        opt.set_stopval(true_min + ftol)
+        objective = lambda t: self.F(float(t), n, whatFunc)
+        result = minimize_scalar(
+            objective,
+            bounds=(0.0, 1.0),
+            method='bounded',
+            options={'maxiter': int(maxiter), 'xatol': float(ftol)}
+        )
 
-        t_min = float(opt.optimize([0.5])[0])
-        h_min = self.map_to_area(t_min, n, x_min, x_max, y_min, y_max)
+        t_min = float(result.x)
+        h_min = self.hilbert_polygon_point(t_min, n)
         if whatFunc == 0:
-            f_min = self.f(*h_min)
+            f_min = float(self.f(*h_min))
         elif whatFunc == 1:
-            f_min = self.f1(*h_min)
+            f_min = float(self.f1_square(*h_min))
         else:
-            f_min = self.f2(*h_min)
-        nfev = int(opt.get_numevals())
+            f_min = float(self.f2_square(*h_min))
+
+        nfev = int(getattr(result, 'nfev', 0))
+        stop_reason = "ftol reached" if abs(f_min - float(true_min)) < float(ftol) else "maxiter reached"
+        print(f"Bounded {stop_reason}: {nfev} function evaluations, f_min = {f_min}")
         return t_min, h_min, f_min, nfev
 
 
