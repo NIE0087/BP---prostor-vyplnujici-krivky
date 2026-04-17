@@ -449,9 +449,9 @@ class Hilbert3DVisualizer:
             ax.plot(n_arr, df_tol["H=-1_iter"].to_numpy(), "s-", label="HOLDER-CONST(1)", linewidth=2, markersize=8)
             ax.plot(n_arr, df_tol["H=-2_iter"].to_numpy(), "^-", label="HOLDER-CONST(2)", linewidth=2, markersize=8)
 
-            ax.set_xlabel("Rad Hilbertovy krivky (n)", fontsize=12)
-            ax.set_ylabel("Pocet iteraci", fontsize=12)
-            ax.set_title(f"Pocet iteraci pro eps={eps_val}", fontsize=13)
+            ax.set_xlabel("Řád Hilbertovy křivky (n)", fontsize=12)
+            ax.set_ylabel("Počet iterací", fontsize=12)
+            ax.set_title(f"Počet iterací pro eps={eps_val}", fontsize=13)
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.3)
 
@@ -508,9 +508,9 @@ class Hilbert3DVisualizer:
         for i, (name, _, _) in enumerate(variants):
             plt.plot(n_values, results[name], color=colors[i], marker=markers[i], label=name, linewidth=2, markersize=4)
 
-        plt.xlabel("Iterace Hilbertovy krivky (n)")
-        plt.ylabel("Pocet iteraci algoritmu")
-        plt.title("Porovnani variant Holderova algoritmu podle poctu iteraci", fontsize=14)
+        plt.xlabel("Iterace Hilbertovy křivky (n)")
+        plt.ylabel("Počet iterací algoritmu")
+        plt.title("Porovnání variant Hölderovského algoritmu podle počtu iterací", fontsize=14)
         plt.grid(True, which="both", ls="-", alpha=0.3)
         plt.legend(fontsize=10, frameon=True, fancybox=True)
         plt.tight_layout()
@@ -549,8 +549,8 @@ class Hilbert3DVisualizer:
                 markeredgewidth=2,
             )
 
-        plt.xlabel("Iterace Hilbertovy krivky (n)", fontsize=12)
-        plt.ylabel("Rozdil od opravdoveho minima", fontsize=12)
+        plt.xlabel("Iterace Hilbertovy křivky (n)", fontsize=12)
+        plt.ylabel("Rozdíl od opravdového minima", fontsize=12)
         plt.title(f"Hyperparameter tuning r (H={H}, I={I})", fontsize=14)
         plt.yscale("log")
         plt.grid(True, which="both", ls="-", alpha=0.3)
@@ -661,6 +661,259 @@ class Hilbert3DVisualizer:
 
         ax.view_init(elev=20)
         plt.show()
+
+    def plot_heat_source_holder_approximation(
+        self,
+        n,
+        H=-2,
+        I=2,
+        r=3,
+        eps=1e-6,
+        max_iter=1000,
+        stop_condition="eps",
+        ftol=1e-6,
+        heat_problem_config=None,
+        cmap_source="viridis",
+        cmap_temp="inferno",
+    ):
+        """Najde aproximaci zdroje pomoci Holdera (whatFunc=2) a vykresli porovnani poli."""
+        if self.hilbert.heat_problem is None:
+            config = {} if heat_problem_config is None else dict(heat_problem_config)
+            self.hilbert.configure_heat_problem(**config)
+
+        heat = self.hilbert.heat_problem
+
+        # Pro stop_condition='eps' se true_min nepouziva, je zde jen kvuli API Holderu.
+        t_min, f_min, x_est, y_est, z_est, holder_iters = self._run_holder(
+            H,
+            I,
+            r,
+            eps,
+            max_iter,
+            n,
+            whatFunc=2,
+            true_min=0.0,
+            ftol=ftol,
+            stop_condition=stop_condition,
+        )
+
+        A_est = float(self.hilbert.A_min + np.clip(z_est, 0.0, 1.0) * (self.hilbert.A_max - self.hilbert.A_min))
+
+        x_true, y_true, A_true = map(float, heat.true_params)
+
+        f_true = heat.source_term(x_true, y_true, A_true)
+        f_est = heat.source_term(float(x_est), float(y_est), A_est)
+        f_diff = f_est - f_true
+
+        u_ref_clean = heat.u_ref_clean
+        u_ref_noisy = heat.u_ref
+        u_noise = u_ref_noisy - u_ref_clean
+        u_est = heat.solve_forward((float(x_est), float(y_est), A_est))
+        # Pouzij stejnou realizaci sumu i na odhadnutem poli pro prime vizualni porovnani.
+        u_est_noisy = u_est + u_noise
+        u_diff_noisy = u_est_noisy - u_ref_noisy
+        u_diff_clean = u_est - u_ref_clean
+
+        x_est_plot = float(x_est)
+        y_est_plot = float(y_est)
+
+        fig, ax = plt.subplots(1, 1, figsize=(6.5, 4.5), constrained_layout=True)
+
+        im00 = ax.imshow(
+            u_ref_noisy.T,
+            origin="lower",
+            extent=(0.0, 1.0, 0.0, 1.0),
+            cmap=cmap_temp,
+            aspect="auto",
+        )
+  
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        fig.colorbar(im00, ax=ax, label="u(x,y)")
+
+        # Vyrazne oznaceni nalezene aproximace hvezdou.
+        ax.scatter(
+            x_est_plot,
+            y_est_plot,
+            marker="*",
+            s=260,
+            c="yellow",
+            edgecolors="black",
+            linewidths=1.3,
+            zorder=10,
+            label="Aproximace zdroje",
+        )
+        ax.scatter(
+            x_true,
+            y_true,
+            marker="o",
+            s=52,
+            c="white",
+            edgecolors="black",
+            linewidths=0.8,
+            zorder=10,
+            label="Skutečný zdroj",
+        )
+
+        ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+
+        fig.suptitle(
+            "Teplotní pole s nalezenou aproximací zdroje",
+        )
+        plt.show()
+
+        return {
+            "t_min": float(t_min),
+            "cost_min": float(f_min),
+            "holder_iterations": int(holder_iters),
+            "estimated_params": (float(x_est), float(y_est), float(A_est)),
+            "true_params": (x_true, y_true, A_true),
+            "source_error_norm": float(np.linalg.norm(f_diff)),
+            "temperature_error_norm_vs_noisy_ref": float(np.linalg.norm(u_diff_noisy)),
+            "temperature_error_norm_vs_clean_ref": float(np.linalg.norm(u_diff_clean)),
+        }
+
+    def plot_heat_source_estimated_source_map(
+        self,
+        n,
+        H=-2,
+        I=2,
+        r=3,
+        eps=1e-6,
+        max_iter=1000,
+        stop_condition="eps",
+        ftol=1e-6,
+        heat_problem_config=None,
+        cmap_source="viridis",
+    ):
+        """Vykresli samostatne mapu odhadnuteho zdroje nalezeneho Holderovym algoritmem."""
+        if self.hilbert.heat_problem is None:
+            config = {} if heat_problem_config is None else dict(heat_problem_config)
+            self.hilbert.configure_heat_problem(**config)
+
+        heat = self.hilbert.heat_problem
+
+        t_min, f_min, x_est, y_est, z_est, holder_iters = self._run_holder(
+            H,
+            I,
+            r,
+            eps,
+            max_iter,
+            n,
+            whatFunc=2,
+            true_min=0.0,
+            ftol=ftol,
+            stop_condition=stop_condition,
+        )
+
+        A_est = float(self.hilbert.A_min + np.clip(z_est, 0.0, 1.0) * (self.hilbert.A_max - self.hilbert.A_min))
+        x_true, y_true, A_true = map(float, heat.true_params)
+
+        f_true = heat.source_term(x_true, y_true, A_true)
+        f_est = heat.source_term(float(x_est), float(y_est), A_est)
+        f_diff = f_est - f_true
+
+        fig, ax = plt.subplots(1, 1, figsize=(6.5, 4.5), constrained_layout=True)
+        image = ax.imshow(
+            f_est.T,
+            origin="lower",
+            extent=(0.0, 1.0, 0.0, 1.0),
+            cmap=cmap_source,
+            aspect="auto",
+        )
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        fig.colorbar(image, ax=ax, label="f(x,y,theta)")
+
+        ax.scatter(
+            float(x_est),
+            float(y_est),
+            marker="*",
+            s=260,
+            c="yellow",
+            edgecolors="black",
+            linewidths=1.3,
+            zorder=10,
+            label="Aproximace zdroje",
+        )
+        ax.scatter(
+            x_true,
+            y_true,
+            marker="o",
+            s=52,
+            c="white",
+            edgecolors="black",
+            linewidths=0.8,
+            zorder=10,
+            label="Skutečný zdroj",
+        )
+        ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
+
+        fig.suptitle(
+            "Aproximace zdroje"
+        
+        )
+        plt.show()
+
+        return {
+            "t_min": float(t_min),
+            "cost_min": float(f_min),
+            "holder_iterations": int(holder_iters),
+            "estimated_params": (float(x_est), float(y_est), float(A_est)),
+            "true_params": (x_true, y_true, A_true),
+            "source_error_norm": float(np.linalg.norm(f_diff)),
+        }
+
+    def plot_heat_source_holder_approximation_series(
+        self,
+        n_values,
+        H=-2,
+        I=2,
+        r=3,
+        eps=1e-6,
+        max_iter=1000,
+        stop_condition="eps",
+        ftol=1e-6,
+        heat_problem_config=None,
+        cmap_source="viridis",
+        cmap_temp="inferno",
+    ):
+        """Spusti vizualizaci Holder aproximace zdroje pro vice hodnot n."""
+        if not n_values:
+            raise ValueError("n_values nesmi byt prazdne")
+
+        summaries = []
+        for n in n_values:
+            result = self.plot_heat_source_holder_approximation(
+                n=n,
+                H=H,
+                I=I,
+                r=r,
+                eps=eps,
+                max_iter=max_iter,
+                stop_condition=stop_condition,
+                ftol=ftol,
+                heat_problem_config=heat_problem_config,
+                cmap_source=cmap_source,
+                cmap_temp=cmap_temp,
+            )
+            x_est, y_est, A_est = result["estimated_params"]
+            summaries.append(
+                {
+                    "n": int(n),
+                    "cost_min": float(result["cost_min"]),
+                    "holder_iterations": int(result["holder_iterations"]),
+                    "x_est": float(x_est),
+                    "y_est": float(y_est),
+                    "A_est": float(A_est),
+                    "temperature_error_norm": float(result["temperature_error_norm_vs_noisy_ref"]),
+                    "source_error_norm": float(result["source_error_norm"]),
+                }
+            )
+
+        df = pd.DataFrame(summaries)
+        print(df.to_string(index=False))
+        return df
 
 
 

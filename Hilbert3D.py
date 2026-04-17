@@ -9,6 +9,43 @@ class Hilbert3D:
     
     def __init__(self, precision: int):
         self.precision = precision
+        self.heat_problem = None
+        self.A_min = 1.0
+        self.A_max = 10.0
+
+    def configure_heat_problem(
+        self,
+        grid_size=50,
+        sigma=0.08,
+        noise_level=0.01,
+        true_params=(0.35, 0.70, 5.0),
+        random_seed=123,
+        A_min=1.0,
+        A_max=10.0,
+    ):
+        """Nastavi 3D inverzni problem zdroje tepla pro whatFunc=2."""
+        import importlib
+        import HeatSourceProblem
+
+        HeatSourceProblem = importlib.reload(HeatSourceProblem)
+
+        heat_cls = getattr(HeatSourceProblem, "HeatSourceInverseProblem3D", None)
+        if heat_cls is None:
+            heat_cls = getattr(HeatSourceProblem, "HeatSourceInverseProblem", None)
+        if heat_cls is None:
+            raise AttributeError(
+                "HeatSourceProblem module nema tridu HeatSourceInverseProblem3D ani HeatSourceInverseProblem."
+            )
+
+        self.heat_problem = heat_cls(
+            grid_size=grid_size,
+            sigma=sigma,
+            noise_level=noise_level,
+            true_params=true_params,
+            random_seed=random_seed,
+        )
+        self.A_min = float(A_min)
+        self.A_max = float(A_max)
 
     def dec_to_octal(self, number: float):
         q_num = []
@@ -158,19 +195,18 @@ class Hilbert3D:
         w = x_min + z * (x_max - x_min)
         return Hilbert3D.f1(u, v, w)
 
-    @staticmethod
-    def f2(x, y, z):
-     
-        return abs(x-0.1) + abs(y - 0.55) + abs(z - 0.55)
+    def f2(self, x, y, z):
+        """Cenova funkce inverzni ulohy: J(x,y,A), kde A je mapovane ze z."""
+        if self.heat_problem is None:
+            self.configure_heat_problem()
 
-    @staticmethod
-    def f2_cube(x, y, z):
-        # Levy scaled FROM [-10, 10]^3 TO [0,1]^3, global min at (0.55, 0.55, 0.55)
-        x_min, x_max = 0, 1
-        u = x_min + x * (x_max - x_min)
-        v = x_min + y * (x_max - x_min)
-        w = x_min + z * (x_max - x_min)
-        return Hilbert3D.f2(u, v, w)
+        a_unit = float(np.clip(z, 0.0, 1.0))
+        A_current = self.A_min + a_unit * (self.A_max - self.A_min)
+        return self.heat_problem.cost((x, y, A_current))
+
+    def f2_cube(self, x, y, z):
+        """Zpetna kompatibilita: pro whatFunc=2 vraci stejnou hodnotu jako f2."""
+        return self.f2(x, y, z)
 
     def evaluate_function(self, x, y, z, whatFunc=0):
         if whatFunc == 0:
@@ -228,130 +264,60 @@ class Hilbert3D:
         )
         return f_min, x_min, y_min, z_min, generation_count[0], nfev
    
-    # --- Optimalizacni algoritmus pro hledani minima ---
+    
     def Holder_algorithm(self, H, r, eps, max_iter, n, true_min=None, ftol=1e-6, stop_condition="eps", I=1, whatFunc=0, return_iterations=False):
-        N = 3
+        """Spustí Holderův 1D algoritmus nad Hilbertovsky mapovanou funkcí."""
+        N = 3                      
         stop_condition = stop_condition.lower()
         if stop_condition not in {"eps", "ftol"}:
             raise ValueError("stop_condition must be either 'eps' or 'ftol'.")
 
-        if stop_condition == "ftol" and true_min is None:
-            raise ValueError("true_min must be provided when stop_condition='ftol'.")
-
         # STEP 0: inicializace
         xk = [0.0, 1.0]
-        zk = [self.F(0.0, n, whatFunc), self.F(1.0, n, whatFunc)]
+        zk = [self.F(0.0,n, whatFunc), self.F(1.0,n, whatFunc)]
+        k = 2
+        usedH_arr = []  
+        
+        # SELECT(2) konstanty
+        flag = 0  
+        imin = 0  
+        side_flag = 0  
+        z_new = None  # hodnota naposledy přidaného bodu (před sortem)
 
-        # SELECT(2) state variables
-        flag = 0
-        imin = 0
-        side_flag = 0
-
-        actual_iterations = 0
         for iteracni_krok in range(max_iter):
             actual_iterations = iteracni_krok + 1
-            # STEP 1: serazeni bodu podle x
+            # STEP 1: serazeni bodu podle hodnoty
+
             xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
 
             # STEP 2: odhad Holderovy konstanty
             if H == -1:
-                hvalues = []
-                for i in range(1, len(xk)):
-                    diff = abs(zk[i] - zk[i - 1]) / (abs(xk[i] - xk[i - 1])) ** (1 / N) if abs(xk[i] - xk[i - 1]) > 0 else 0
-                    hvalues.append(diff)
-                h_value = max(max(hvalues), 1e-8) if hvalues else 1e-8
-                h_used = [h_value] * max(1, len(xk) - 1)
-
+                h_used, h_value = self.HOLDER_CONST_1(xk, zk, N)
             elif H == -2:
-                m_values = []
-                for i in range(1, len(xk)):
-                    diff = abs(zk[i] - zk[i - 1]) / (abs(xk[i] - xk[i - 1])) ** (1 / N) if abs(xk[i] - xk[i - 1]) > 0 else 0
-                    m_values.append(diff)
-
-                if not m_values:
-                    h_used = [1e-8]
-                else:
-                    if len(m_values) == 1:
-                        lambda_values = [m_values[0]]
-                    else:
-                        lambda_values = []
-                        for i in range(1, len(m_values) - 1):
-                            lambda_values.append(max(m_values[i - 1], m_values[i], m_values[i + 1]))
-                        lambda_values = [max(m_values[0], m_values[1])] + lambda_values + [max(m_values[-2], m_values[-1])]
-
-                    X_max = max(abs(xk[i] - xk[i - 1]) ** (1 / N) for i in range(1, len(xk)))
-                    h_k = max(m_values)
-                    gamma_values = []
-                    for i in range(1, len(xk)):
-                        gamma_values.append(h_k * abs(xk[i] - xk[i - 1]) ** (1 / N) / X_max)
-
-                    xi_param = 1e-8
-                    h_values = []
-                    for i in range(len(lambda_values)):
-                        if i < len(gamma_values):
-                            h_values.append(max(lambda_values[i], gamma_values[i], xi_param))
-                        else:
-                            h_values.append(max(lambda_values[i], xi_param))
-                    h_used = h_values
+                h_used, h_value = self.HOLDER_CONST_2(xk, zk, N)
             else:
-                h_value = max(H, 1e-8)
-                h_used = [h_value] * max(1, len(xk) - 1)
+                h_value = H
+                h_used = [h_value] * (len(xk) - 1)
 
+            usedH_arr.append(h_value)
+          
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
             yi = []
+            
             for i in range(1, len(xk)):
-                h_i = max(h_used[i - 1], 1e-8)
-                y = 0.5 * (xk[i - 1] + xk[i]) - (zk[i] - zk[i - 1]) / (2 * r * h_i * (xk[i] - xk[i - 1]) ** ((1 - N) / N))
+                h_i = max(h_used[i-1], 1e-8)
+                y = 0.5*(xk[i-1] + xk[i]) - (zk[i] - zk[i-1])/(2*r*h_i*(xk[i]-xk[i-1])**((1-N)/N))
                 yi.append(y)
-                Mi.append(min(zk[i - 1] - r * h_i * abs(y - xk[i - 1]) ** (1 / N), zk[i] - r * h_i * abs(xk[i] - y) ** (1 / N)))
-
-            # STEP 4: vyber intervalu (SELECT(1) nebo SELECT(2))
+                # Vypocet M_i 
+                Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
+            
+            # STEP 4: vyber intervalu
             if I == 1:
-                idx = int(np.argmin(Mi))
+                idx, y_star = self.SELECT_1(Mi, yi)
             else:
-                idx = int(np.argmin(Mi))
-                current_imin = int(np.argmin(zk))
-
-                if flag == 1:
-                    if len(zk) > 1 and zk[-1] < zk[imin]:
-                        imin = len(zk) - 1
-
-                    delta = 1e-5
-                    if imin >= 1 and imin < len(xk) - 1:
-                        left_size = abs(xk[imin] - xk[imin - 1]) if imin > 0 else 0
-                        right_size = abs(xk[imin + 1] - xk[imin]) if imin + 1 < len(xk) else 0
-
-                        if side_flag == 0:
-                            if right_size > delta and imin < len(Mi):
-                                t_choice = imin
-                            elif left_size > delta and imin - 1 < len(Mi):
-                                t_choice = imin - 1
-                            else:
-                                t_choice = int(np.argmin(Mi))
-                        else:
-                            if left_size > delta and imin - 1 < len(Mi):
-                                t_choice = imin - 1
-                            elif right_size > delta and imin < len(Mi):
-                                t_choice = imin
-                            else:
-                                t_choice = int(np.argmin(Mi))
-
-                        side_flag = 1 - side_flag
-
-                        if 0 <= t_choice < len(Mi):
-                            interval_size = abs(xk[t_choice + 1] - xk[t_choice])
-                            if interval_size > delta:
-                                idx = t_choice
-
-                    flag = 0
-                else:
-                    flag = 1
-                    idx = int(np.argmin(Mi))
-                    imin = current_imin
-
-            y_star = yi[idx]
-
+                idx, y_star, flag, imin, side_flag = self.SELECT_2(Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new)
+            
             # STEP 5: zastavovaci podminka
             if stop_condition == "ftol":
                 current_best = min(zk)
@@ -374,3 +340,111 @@ class Hilbert3D:
         if return_iterations:
             return t_min, f_min, x_min, y_min, z_min, actual_iterations
         return t_min, f_min, x_min, y_min, z_min
+
+
+    def HOLDER_CONST_1(self, xk, zk, N):
+        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly."""
+        hvalues = []
+        for i in range(1, len(xk)):
+            diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
+            hvalues.append(diff)
+
+        h_hat = max(hvalues)
+        h_value = max(h_hat, 1e-8)
+        h_used = [h_value] * len(hvalues)
+        return h_used, h_value
+
+
+    def HOLDER_CONST_2(self, xk, zk, N):
+        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů."""
+        m_values = []
+        for i in range(1, len(xk)):
+            diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
+            m_values.append(diff)
+
+        lambda_values = []
+        if len(xk) == 2:
+            lambda_values.append(m_values[0])
+        else:
+            for i in range(1, len(m_values)-1):
+                lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
+                lambda_values.append(lambda_i)
+
+            lambda_2 = max(m_values[0], m_values[1])
+            lambda_k = max(m_values[-2], m_values[-1])
+            lambda_values = [lambda_2] + lambda_values + [lambda_k]
+
+        gamma_values = []
+        X_max = max([abs(xk[i] - xk[i-1])**(1/N) for i in range(1, len(xk))])
+        h_k = max(m_values)
+
+        for i in range(1, len(xk)):
+            gamma_i = h_k * abs(xk[i] - xk[i-1])**(1/N) / X_max
+            gamma_values.append(gamma_i)
+
+        xi_param = 1e-8
+        h_values = []
+        for i in range(len(lambda_values)):
+            if i < len(gamma_values):
+                h_i = max(lambda_values[i], gamma_values[i], xi_param)
+            else:
+                h_i = max(lambda_values[i], xi_param)
+            h_values.append(h_i)
+
+        h_value = max(h_values)
+        return h_values, h_value
+
+
+    def SELECT_1(self, Mi, yi):
+        """Vybere interval s nejmenší hodnotou minorantu."""
+        idx = np.argmin(Mi)
+        y_star = yi[idx]
+        return idx, y_star
+
+    def SELECT_2(self, Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new=None):
+        """Rozšířený výběr intervalu se střídáním stran kolem nejlepšího bodu."""
+        idx = np.argmin(Mi)
+        delta = eps*10
+
+        if flag == 1:
+            # Aktualizuj imin pokud nově přidaný bod je lepší (g(x^k) < g(x_imin))
+            # z_new je hodnota naposledy přidaného bodu 
+            if z_new is not None and z_new < zk[imin]:
+                imin = np.argmin(zk)
+
+            # Lokální zlepšení: střídej strany kolem imin
+            if imin >= 1 and imin < len(xk) - 1:
+                left_size = abs(xk[imin] - xk[imin - 1])
+                right_size = abs(xk[imin + 1] - xk[imin])
+
+                if side_flag == 0:
+                    if right_size > delta and imin < len(Mi):
+                        t_choice = imin
+                    elif left_size > delta and imin - 1 < len(Mi):
+                        t_choice = imin - 1
+                    else:
+                        t_choice = np.argmin(Mi)
+                else:
+                    if left_size > delta and imin - 1 < len(Mi):
+                        t_choice = imin - 1
+                    elif right_size > delta and imin < len(Mi):
+                        t_choice = imin
+                    else:
+                        t_choice = np.argmin(Mi)
+
+                side_flag = 1 - side_flag
+
+                if 0 <= t_choice < len(Mi):
+                    interval_size = abs(xk[t_choice + 1] - xk[t_choice])
+                    if interval_size > delta:
+                        idx = t_choice
+
+            flag = 0
+        else:
+            # flag == 0: globální výběr jako SELECT(1)
+            idx = np.argmin(Mi)
+            imin = np.argmin(zk)
+            flag = 1
+
+        y_star = yi[idx]
+        return idx, y_star, flag, imin, side_flag

@@ -9,6 +9,7 @@ import seaborn as sns
 class Hilbert2D:
 
     def __init__(self, precision: int):
+        """Nastaví přesnost kvartérního rozvoje pro parametr t."""
         self.precision = precision
 
 
@@ -20,6 +21,7 @@ class Hilbert2D:
     
     # --- Konverze ---
     def dec_to_quarter(self, number: float):
+        """Převede číslo z intervalu [0,1] na kvartérní cifry délky precision."""
         q_num = []
         i = 0
         if 0 < number < 1:
@@ -41,6 +43,7 @@ class Hilbert2D:
 
     # --- Hilbert 2D vzorec ---
     def ej_and_dj_counter(self, q_num):
+        """Spočítá pomocné parity e0j a dj pro konstrukci bodu křivky."""
         e0j_counted = np.zeros(len(q_num))
         e3j_counted = np.zeros(len(q_num))
         dj_counted = np.zeros(len(q_num))
@@ -59,6 +62,7 @@ class Hilbert2D:
     
     
     def calculate_point(self, e0j_counted, dj_counted, q_num):
+        """Vypočítá bod Hilbertovy křivky z kvartérních číslic."""
         s = np.zeros((2, 1))
         for i in range(1, len(q_num) + 1):
             s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
@@ -71,6 +75,7 @@ class Hilbert2D:
 
 
     def hilbert_point(self, t):
+        """Vrátí bod ideální 2D Hilbertovy křivky pro parametr t."""
         if t == 1.0:
             return np.array([1.0, 0.0]) 
         
@@ -81,6 +86,7 @@ class Hilbert2D:
     
 
     def hilbert_polygon_point(self, t, n):
+        """Vrátí bod polygonální aproximace Hilbertovy křivky řádu n."""
     
         N = 2**(2*n)
     
@@ -107,23 +113,25 @@ class Hilbert2D:
     @staticmethod
     # --- Random function ---
     def f(x, y):
+        """Jednoduchá testovací funkce se známým minimem."""
         return ((x - 0.3)**2 + (y - 0.7)**2)**(1/2) + 1
     
     
-    # --- Booth function --- 
-    # --- Three-hump camel function ---
-    # --- Easom function ---
+     
+    # --- Branin function ---
     @staticmethod
     def f1(x, y):
-        #return (x + 2*y - 7)**2 + (y + 2*x - 5)**2
+        """Braninova testovací funkce pro globální optimalizaci."""
+        
         a, b, c, r, s, t = 1, 5.1/(4*np.pi**2), 5/np.pi, 6, 10, 1/(8*np.pi)
         return a * (y - b*x**2 + c*x - r)**2 + s*(1 - t)*np.cos(x) + s
-        #return (1.5 - x + x*y)**2 + (2.25 - x + x*y**2)**2 + (2.625 - x + x*y**3)**2
+        
     
 
     # --- Matyas function ---
     @staticmethod
     def f2(x, y):
+        """Matyasova testovací funkce pro optimalizaci ve 2D."""
         return 0.26*(x**2 + y**2) - 0.48*y*x
     
      
@@ -134,6 +142,7 @@ class Hilbert2D:
 
     @staticmethod
     def f1_square(x, y):
+        """Přemapuje [0,1]^2 na oblast Braninovy funkce a vyhodnotí ji."""
         x_min=-5
         x_max=10
         y_min=0
@@ -144,13 +153,13 @@ class Hilbert2D:
 
 
         return Hilbert2D.f1(u,v)
-        #return 2*x**2 - 1.05*x**4 + (x**6)/6 + y*x + y**2
-        #return -math.cos(x)*math.cos(y)*math.exp(-((x-math.pi)**2 + (y-math.pi)**2))
+        
     
 
     # --- Matyas function ---
     @staticmethod
     def f2_square(x, y):
+        """Přemapuje [0,1]^2 na oblast Matyasovy funkce a vyhodnotí ji."""
         x_min=-10
         x_max=10
         y_min=-10
@@ -165,6 +174,7 @@ class Hilbert2D:
     
     #---- Složená funkce -----
     def F(self, t, n, whatFunc):
+        """Složená 1D funkce: Hilbertovo mapování + výběr testovací funkce."""
         x, y = self.hilbert_polygon_point(t,n)
         if whatFunc == 0:
             return self.f(x, y)
@@ -175,10 +185,7 @@ class Hilbert2D:
 
 
     def map_to_area(self, t,n, x_min, x_max, y_min, y_max):
-        """
-        Přemapuje bod z jednotkového čtverce [0,1]x[0,1]
-        do obdélníku [x_min, x_max] x [y_min, y_max].
-        """
+        """Přemapuje bod křivky z [0,1]^2 do zadaného obdélníku."""
         point = self.hilbert_polygon_point(t,n)
         px, py = point
         new_x = x_min + (x_max - x_min) * px
@@ -187,6 +194,7 @@ class Hilbert2D:
 
 
     def F_mapped(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
+        """Vyhodnotí zvolenou funkci po mapování do zadané oblasti."""
         x, y = self.map_to_area(t, n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             return self.f(x, y)
@@ -200,42 +208,10 @@ class Hilbert2D:
 # ------------ ALGORITMY HLEDAJÍCÍ MINIMA ----------------------#
 #################################################################
 
-    def find_minimum_mapped(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol, maxiter=200):
-        if true_min is None:
-            raise ValueError("true_min must be provided.")
-
-        if ftol <= 0:
-            raise ValueError("ftol must be positive.")
-
-        if maxiter <= 0:
-            raise ValueError("maxiter must be positive.")
-
-        objective = lambda t: self.F(float(t), n, whatFunc)
-        result = minimize_scalar(
-            objective,
-            bounds=(0.0, 1.0),
-            method='bounded',
-            options={'maxiter': int(maxiter), 'xatol': float(ftol)}
-        )
-
-        t_min = float(result.x)
-        h_min = self.hilbert_polygon_point(t_min, n)
-        if whatFunc == 0:
-            f_min = float(self.f(*h_min))
-        elif whatFunc == 1:
-            f_min = float(self.f1_square(*h_min))
-        else:
-            f_min = float(self.f2_square(*h_min))
-
-        nfev = int(getattr(result, 'nfev', 0))
-        stop_reason = "ftol reached" if abs(f_min - float(true_min)) < float(ftol) else "maxiter reached"
-        print(f"Bounded {stop_reason}: {nfev} function evaluations, f_min = {f_min}")
-        return t_min, h_min, f_min, nfev
-
-
 
 
     def differential_evolution_mapped(self, x_min, x_max, y_min, y_max, whatFunc, true_min=None, ftol=1e-6, maxiter=200):
+        """Najde minimum pomocí differential evolution v mapované oblasti."""
         
         def objective(coords):
             x, y = coords
@@ -274,6 +250,7 @@ class Hilbert2D:
 
 
     def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol, stop_condition="eps"):
+        """Spustí Holderův 1D algoritmus nad Hilbertovsky mapovanou funkcí."""
         N = 2                      
         stop_condition = stop_condition.lower()
         if stop_condition not in {"eps", "ftol"}:
@@ -285,10 +262,11 @@ class Hilbert2D:
         k = 2
         usedH_arr = []  
         
-        # SELECT(2) state variables
+        # SELECT(2) konstanty
         flag = 0  
         imin = 0  
         side_flag = 0  
+        z_new = None  # hodnota naposledy přidaného bodu (před sortem)
 
         for iteracni_krok in range(max_iter):
             
@@ -297,81 +275,15 @@ class Hilbert2D:
             xk, zk = (list(t) for t in zip(*sorted(zip(xk, zk))))
 
             # STEP 2: odhad Holderovy konstanty
-            
-            # -----------HOLDER-CONST(1)-----------
-            
             if H == -1:
-                hvalues = []
-                for i in range(1, len(xk)):
-                    diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-                    hvalues.append(diff)
-                h_hat = max(hvalues) 
-                h_value = max([h_hat, 1e-8])
-                h_used = [h_value] * len(hvalues)
-                
-                usedH_arr.append(h_value)
-                
-                
-            
+                h_used, h_value = self.HOLDER_CONST_1(xk, zk, N)
             elif H == -2:
-                # -----------HOLDER-CONST(2)-----------
-                
-                
-                
-                    # Výpočet mi z rovnice (3.3)
-                    m_values = []
-                    for i in range(1, len(xk)):
-                        diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1])>0 else 0
-                        m_values.append(diff)
-                    
-                    # Výpočet λi = max{mi-1, mi, mi+1}
-                    lambda_values = []
-                    
-                    if len(xk) ==2:
-                        lambda_values.append(m_values[0])
-                    else:      
-                        for i in range(1, len(m_values)-1):  
-                            lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
-                            lambda_values.append(lambda_i)
-                        lambda_2 = max(m_values[0], m_values[1])  # m2, m3
-                        lambda_k = max(m_values[-2], m_values[-1])  # mk-1, mk
-                        lambda_values = [lambda_2] + lambda_values + [lambda_k]
-                    
-                    # Výpočet γi = h^k * |xi - xi-1| / X^max
-                    gamma_values = []
-                    X_max = max([abs(xk[i] - xk[i-1])**(1/N) for i in range(1, len(xk))])
-                    
-                    
-                    h_k = max(m_values)
-                    
-                    for i in range(1, len(xk)):
-                        gamma_i = h_k * abs(xk[i] - xk[i-1])**(1/N) / X_max
-                        gamma_values.append(gamma_i)
-                    
-                    # Výpočet hi = max{λi, γi, ξ}
-                    xi_param = 1e-8  # ξ > 0
-                    h_values = []
-                    for i in range(len(lambda_values)):
-                        if i < len(gamma_values):
-                            h_i = max(lambda_values[i], gamma_values[i], xi_param)
-                           
-                        else:
-                            h_i = max(lambda_values[i], xi_param)
-                        h_values.append(h_i)
-                    
-                    h_used = h_values
-                    temporary = max(h_values) # pro vypocet gammy
-                
-                
-                
-                    usedH_arr.append(temporary)
+                h_used, h_value = self.HOLDER_CONST_2(xk, zk, N)
             else:
-            
                 h_value = H
-              
                 h_used = [h_value] * (len(xk) - 1)
-                
-                usedH_arr.append(h_value)
+
+            usedH_arr.append(h_value)
           
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
@@ -384,73 +296,11 @@ class Hilbert2D:
                 # Vypocet M_i 
                 Mi.append(min(zk[i-1] - r*h_i * abs(y - xk[i-1])**(1/N), zk[i] - r*h_i * abs(xk[i] - y)**(1/N)))
             
-            # STEP 4: vyber intervalu - implementace SELECT(2)
-            if I==1:
-                
-            #---------- SELECT(1) -----------
-                
-                idx = np.argmin(Mi)
-                y_star = yi[idx]
-
+            # STEP 4: vyber intervalu
+            if I == 1:
+                idx, y_star = self.SELECT_1(Mi, yi)
             else:
-                
-                #----------- SELECT(2) ------------
-
-                # Initialize idx with standard selection
-                idx = np.argmin(Mi)
-                
-                # Update imin - index odpovídající současnému odhadu minimální hodnoty
-                current_imin = np.argmin(zk)
-                
-                
-                if flag == 1:
-                    if len(zk) > 1 and zk[-1] < zk[imin]:  
-                        imin = len(zk) - 1
-                        
-                # Local improvement: Alternate the choice of interval
-                    delta = 1e-5 
-                    
-                    # Local improvement logic around imin
-                    if imin >= 1 and imin < len(xk)-1:
-                       
-                        left_size = abs(xk[imin] - xk[imin-1]) if imin > 0 else 0
-                        right_size = abs(xk[imin+1] - xk[imin]) if imin+1 < len(xk) else 0
-                        
-                        # Výběr intervalu podle velikosti a delta - střídání mezi right a left
-                        
-                        if side_flag == 0:  # nejprve right
-                            if right_size > delta and imin < len(Mi):
-                                t_choice = imin 
-                            elif left_size > delta and imin-1 < len(Mi):
-                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
-                            else:
-                                t_choice = np.argmin(Mi)  # standardní výběr
-                        else: 
-                            if left_size > delta and imin-1 < len(Mi):
-                                t_choice = imin - 1  # interval (x_{imin-1}, x_imin)
-                            elif right_size > delta and imin < len(Mi):
-                                t_choice = imin 
-                            else:
-                                t_choice = np.argmin(Mi)  # standardní výběr
-                        
-                        
-                        side_flag = 1 - side_flag
-                            
-                        # Ověření platnosti výběru
-                        if 0 <= t_choice < len(Mi):
-                            interval_size = abs(xk[t_choice+1] - xk[t_choice])
-                            if interval_size > delta:
-                                idx = t_choice
-                    
-                    # Update flag
-                    flag = 0  
-                else:
-                    # Reset flag and use standard selection
-                    flag = 1  
-                    idx= np.argmin(Mi)
-                    imin = current_imin  # Update imin
-                
-                y_star = yi[idx]
+                idx, y_star, flag, imin, side_flag = self.SELECT_2(Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new)
             
             # STEP 5: zastavovaci podminka
             
@@ -471,17 +321,18 @@ class Hilbert2D:
                     break
             else:
                 if len(xk) > 1:
-                    nejjemnejsi_interval = min(
+                    min_interval = min(
                         abs(xk[i] - xk[i - 1]) ** (1 / N)
                         for i in range(1, len(xk))
                     )
-                    if nejjemnejsi_interval < eps:
+                    if min_interval < eps:
                         print(f"Algorithm stopped after {iteracni_krok + 1} iterations - smallest interval below threshold.")
                         break
            
 
             xk.append(y_star)
-            zk.append(self.F(y_star, n, whatFunc))
+            z_new = self.F(y_star, n, whatFunc)
+            zk.append(z_new)
             k += 1
         
         min_idx = np.argmin(zk)
@@ -497,4 +348,109 @@ class Hilbert2D:
         return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
 
 
-   
+    def HOLDER_CONST_1(self, xk, zk, N):
+        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly."""
+        hvalues = []
+        for i in range(1, len(xk)):
+            diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
+            hvalues.append(diff)
+
+        h_hat = max(hvalues)
+        h_value = max(h_hat, 1e-8)
+        h_used = [h_value] * len(hvalues)
+        return h_used, h_value
+
+
+    def HOLDER_CONST_2(self, xk, zk, N):
+        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů."""
+        m_values = []
+        for i in range(1, len(xk)):
+            diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
+            m_values.append(diff)
+
+        lambda_values = []
+        if len(xk) == 2:
+            lambda_values.append(m_values[0])
+        else:
+            for i in range(1, len(m_values)-1):
+                lambda_i = max(m_values[i-1], m_values[i], m_values[i+1])
+                lambda_values.append(lambda_i)
+
+            lambda_2 = max(m_values[0], m_values[1])
+            lambda_k = max(m_values[-2], m_values[-1])
+            lambda_values = [lambda_2] + lambda_values + [lambda_k]
+
+        gamma_values = []
+        X_max = max([abs(xk[i] - xk[i-1])**(1/N) for i in range(1, len(xk))])
+        h_k = max(m_values)
+
+        for i in range(1, len(xk)):
+            gamma_i = h_k * abs(xk[i] - xk[i-1])**(1/N) / X_max
+            gamma_values.append(gamma_i)
+
+        xi_param = 1e-8
+        h_values = []
+        for i in range(len(lambda_values)):
+            if i < len(gamma_values):
+                h_i = max(lambda_values[i], gamma_values[i], xi_param)
+            else:
+                h_i = max(lambda_values[i], xi_param)
+            h_values.append(h_i)
+
+        h_value = max(h_values)
+        return h_values, h_value
+
+
+    def SELECT_1(self, Mi, yi):
+        """Vybere interval s nejmenší hodnotou minorantu."""
+        idx = np.argmin(Mi)
+        y_star = yi[idx]
+        return idx, y_star
+
+    def SELECT_2(self, Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new=None):
+        """Rozšířený výběr intervalu se střídáním stran kolem nejlepšího bodu."""
+        idx = np.argmin(Mi)
+        delta = eps*10
+
+        if flag == 1:
+            # Aktualizuj imin pokud nově přidaný bod je lepší (g(x^k) < g(x_imin))
+            # z_new je hodnota naposledy přidaného bodu 
+            if z_new is not None and z_new < zk[imin]:
+                imin = np.argmin(zk)
+
+            # Lokální zlepšení: střídej strany kolem imin
+            if imin >= 1 and imin < len(xk) - 1:
+                left_size = abs(xk[imin] - xk[imin - 1])
+                right_size = abs(xk[imin + 1] - xk[imin])
+
+                if side_flag == 0:
+                    if right_size > delta and imin < len(Mi):
+                        t_choice = imin
+                    elif left_size > delta and imin - 1 < len(Mi):
+                        t_choice = imin - 1
+                    else:
+                        t_choice = np.argmin(Mi)
+                else:
+                    if left_size > delta and imin - 1 < len(Mi):
+                        t_choice = imin - 1
+                    elif right_size > delta and imin < len(Mi):
+                        t_choice = imin
+                    else:
+                        t_choice = np.argmin(Mi)
+
+                side_flag = 1 - side_flag
+
+                if 0 <= t_choice < len(Mi):
+                    interval_size = abs(xk[t_choice + 1] - xk[t_choice])
+                    if interval_size > delta:
+                        idx = t_choice
+
+            flag = 0
+        else:
+            # flag == 0: globální výběr jako SELECT(1)
+            idx = np.argmin(Mi)
+            imin = np.argmin(zk)
+            flag = 1
+
+        y_star = yi[idx]
+        return idx, y_star, flag, imin, side_flag

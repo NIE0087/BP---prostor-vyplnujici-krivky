@@ -588,14 +588,14 @@ class Hilbert2DVisualizer:
         
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Rozdíl od opravdového minima")
-        plt.title("Porovnání variant Hölderova algoritmu", fontsize=14)
+        plt.title("Porovnání variant Hölderovského algoritmu", fontsize=14)
         plt.yscale("log")
         plt.grid(True, which="both", ls="-", alpha=0.3)
         plt.legend(fontsize=10, frameon=True, fancybox=True)
         plt.tight_layout()
         plt.show()
 
-#UPRAVIT!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 
     def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol=None, I=2):
@@ -676,7 +676,7 @@ class Hilbert2DVisualizer:
     
     def _plot_H_comparison(self, df, n_vals, eps_list):
         """
-        Pomocná funkce pro vykreslení výsledků porovnání H aproximací.
+        Pomocná funkce pro vykreslení výsledků porovnání H dopočtů.
         """
         num_eps = len(eps_list)
         
@@ -773,7 +773,7 @@ class Hilbert2DVisualizer:
 
         plt.xlabel("Iterace Hilbertovy křivky (n)")
         plt.ylabel("Počet iterací algoritmu")
-        plt.title("Porovnání variant Holderova algoritmu podle počtu iterací", fontsize=14)
+        plt.title("Porovnání variant Hölderovského algoritmu podle počtu iterací", fontsize=14)
         plt.grid(True, which="both", ls="-", alpha=0.3)
         plt.legend(fontsize=10, frameon=True, fancybox=True)
         plt.tight_layout()
@@ -853,10 +853,10 @@ class Hilbert2DVisualizer:
      plt.xticks(range(len(n_values)), n_values)
      plt.yticks(range(len(eps_values)), [f"{e:.0e}" for e in eps_values])
 
-     plt.xlabel("Hilbert level n")
+     plt.xlabel("Řád Hilbertovy křivky (n)")
      plt.ylabel("eps")
-     plt.title("Rounded error heatmap")
-     plt.colorbar(label="log10(error)")
+     plt.title("Heatmapa zaokrouhlené chyby")
+     plt.colorbar(label="log10(chyba)")
      plt.tight_layout()
      plt.show()
 
