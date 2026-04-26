@@ -9,7 +9,11 @@ import seaborn as sns
 class Hilbert2D:
 
     def __init__(self, precision: int):
-        """Nastaví přesnost kvartérního rozvoje pro parametr t."""
+        """Inicializuje 2D Hilbertovu křivku se zvolenou přesností.
+
+        Args:
+            precision: Počet kvartérních číslic používaných v rozvoji parametru t.
+        """
         self.precision = precision
 
 
@@ -21,7 +25,14 @@ class Hilbert2D:
     
     # --- Konverze ---
     def dec_to_quarter(self, number: float):
-        """Převede číslo z intervalu [0,1] na kvartérní cifry délky precision."""
+        """Převede číslo z intervalu [0,1] na kvartérní reprezentaci.
+
+        Args:
+            number: Vstupní hodnota t z intervalu [0,1].
+
+        Returns:
+            Seznam kvartérních číslic délky precision.
+        """
         q_num = []
         i = 0
         if 0 < number < 1:
@@ -43,7 +54,14 @@ class Hilbert2D:
 
     # --- Hilbert 2D vzorec ---
     def ej_and_dj_counter(self, q_num):
-        """Spočítá pomocné parity e0j a dj pro konstrukci bodu křivky."""
+        """Spočítá pomocné parity e0j a dj pro konstrukci bodu křivky.
+
+        Args:
+            q_num: Seznam kvartérních číslic parametru t.
+
+        Returns:
+            Dvojice polí (e0j_counted, dj_counted).
+        """
         e0j_counted = np.zeros(len(q_num))
         e3j_counted = np.zeros(len(q_num))
         dj_counted = np.zeros(len(q_num))
@@ -62,7 +80,16 @@ class Hilbert2D:
     
     
     def calculate_point(self, e0j_counted, dj_counted, q_num):
-        """Vypočítá bod Hilbertovy křivky z kvartérních číslic."""
+        """Vypočítá obraz bodu s konečným zápisem v kvarterní soustavě.
+
+        Args:
+            e0j_counted: Pole parit odvozených z výskytu číslice 0.
+            dj_counted: Pole kombinovaných parit pro jednotlivé kroky.
+            q_num: Seznam kvartérních číslic parametru t.
+
+        Returns:
+            Sloupcový vektor 2D souřadnic bodu.
+        """
         s = np.zeros((2, 1))
         for i in range(1, len(q_num) + 1):
             s += (1/(2**i)) * ((-1)**e0j_counted[i-1]) * (
@@ -75,7 +102,14 @@ class Hilbert2D:
 
 
     def hilbert_point(self, t):
-        """Vrátí bod ideální 2D Hilbertovy křivky pro parametr t."""
+        """Vrátí bod 2D Hilbertovy křivky pro parametr t s konečným kvarterním zápisem.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+
+        Returns:
+            2D bod na Hilbertově křivce.
+        """
         if t == 1.0:
             return np.array([1.0, 0.0]) 
         
@@ -86,7 +120,15 @@ class Hilbert2D:
     
 
     def hilbert_polygon_point(self, t, n):
-        """Vrátí bod polygonální aproximace Hilbertovy křivky řádu n."""
+        """Vrátí bod spojité aproximace Hilbertovy křivky řádu n.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád spojité aproximace.
+
+        Returns:
+            2D bod na iteraci křivky.
+        """
     
         N = 2**(2*n)
     
@@ -113,7 +155,7 @@ class Hilbert2D:
     @staticmethod
     # --- Random function ---
     def f(x, y):
-        """Jednoduchá testovací funkce se známým minimem."""
+        
         return ((x - 0.3)**2 + (y - 0.7)**2)**(1/2) + 1
     
     
@@ -121,8 +163,6 @@ class Hilbert2D:
     # --- Branin function ---
     @staticmethod
     def f1(x, y):
-        """Braninova testovací funkce pro globální optimalizaci."""
-        
         a, b, c, r, s, t = 1, 5.1/(4*np.pi**2), 5/np.pi, 6, 10, 1/(8*np.pi)
         return a * (y - b*x**2 + c*x - r)**2 + s*(1 - t)*np.cos(x) + s
         
@@ -131,7 +171,6 @@ class Hilbert2D:
     # --- Matyas function ---
     @staticmethod
     def f2(x, y):
-        """Matyasova testovací funkce pro optimalizaci ve 2D."""
         return 0.26*(x**2 + y**2) - 0.48*y*x
     
      
@@ -142,7 +181,7 @@ class Hilbert2D:
 
     @staticmethod
     def f1_square(x, y):
-        """Přemapuje [0,1]^2 na oblast Braninovy funkce a vyhodnotí ji."""
+        """Přemapuje oblast Braninovy funkce a vyhodnotí ji."""
         x_min=-5
         x_max=10
         y_min=0
@@ -159,7 +198,7 @@ class Hilbert2D:
     # --- Matyas function ---
     @staticmethod
     def f2_square(x, y):
-        """Přemapuje [0,1]^2 na oblast Matyasovy funkce a vyhodnotí ji."""
+        """Přemapuje oblast Matyasovy funkce a vyhodnotí ji. """
         x_min=-10
         x_max=10
         y_min=-10
@@ -174,7 +213,16 @@ class Hilbert2D:
     
     #---- Složená funkce -----
     def F(self, t, n, whatFunc):
-        """Složená 1D funkce: Hilbertovo mapování + výběr testovací funkce."""
+        """Vyhodnotí 1D složenou funkci.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád iterace Hilbertovy křivky.
+            whatFunc: Volba funkce (0=f, 1=f1_square, 2=f2_square).
+
+        Returns:
+            Hodnota zvolené funkce v mapovaném bodě.
+        """
         x, y = self.hilbert_polygon_point(t,n)
         if whatFunc == 0:
             return self.f(x, y)
@@ -185,7 +233,19 @@ class Hilbert2D:
 
 
     def map_to_area(self, t,n, x_min, x_max, y_min, y_max):
-        """Přemapuje bod křivky z [0,1]^2 do zadaného obdélníku."""
+        """Přemapuje bod Hilbertovy křivky do zadaného obdélníku.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád iterace Hilbertovy křivky.
+            x_min: Levá hranice cílové oblasti v ose x.
+            x_max: Pravá hranice cílové oblasti v ose x.
+            y_min: Dolní hranice cílové oblasti v ose y.
+            y_max: Horní hranice cílové oblasti v ose y.
+
+        Returns:
+            2D bod po lineárním přemapování.
+        """
         point = self.hilbert_polygon_point(t,n)
         px, py = point
         new_x = x_min + (x_max - x_min) * px
@@ -194,7 +254,20 @@ class Hilbert2D:
 
 
     def F_mapped(self, t, n, x_min, x_max, y_min, y_max, whatFunc):
-        """Vyhodnotí zvolenou funkci po mapování do zadané oblasti."""
+        """Vyhodnotí zvolenou funkci v bodě mapovaném do cílové oblasti.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád iterace Hilbertovy křivky.
+            x_min: Levá hranice cílové oblasti na ose x.
+            x_max: Pravá hranice cílové oblasti na ose x.
+            y_min: Dolní hranice cílové oblasti na ose y.
+            y_max: Horní hranice cílové oblasti na ose y.
+            whatFunc: Volba funkce (0=f, 1=f1, 2=f2).
+
+        Returns:
+            Hodnota zvolené funkce v namapovaném bodě.
+        """
         x, y = self.map_to_area(t, n, x_min, x_max, y_min, y_max)
         if whatFunc == 0:
             return self.f(x, y)
@@ -211,7 +284,21 @@ class Hilbert2D:
 
 
     def differential_evolution_mapped(self, x_min, x_max, y_min, y_max, whatFunc, true_min=None, ftol=1e-6, maxiter=200):
-        """Najde minimum pomocí differential evolution v mapované oblasti."""
+        """Najde minimum funkce v obdélníku metodou differential evolution.
+
+        Args:
+            x_min: Levá hranice oblasti na ose x.
+            x_max: Pravá hranice oblasti na ose x.
+            y_min: Dolní hranice oblasti na ose y.
+            y_max: Horní hranice oblasti na ose y.
+            whatFunc: Volba optimalizované funkce (0=f, 1=f1, 2=f2).
+            true_min: Volitelná referenční minimální hodnota pro předčasné zastavení.
+            ftol: Tolerance pro kontrolu blízkosti k true_min.
+            maxiter: Maximální počet generací.
+
+        Returns:
+            N-tice (f_min, x_min_de, y_min_de, iterations, nfev).
+        """
         
         def objective(coords):
             x, y = coords
@@ -250,7 +337,23 @@ class Hilbert2D:
 
 
     def Holder_algorithm_mapped(self,H,I, r,eps,max_iter,n, whatFunc, true_min, ftol, stop_condition="eps"):
-        """Spustí Holderův 1D algoritmus nad Hilbertovsky mapovanou funkcí."""
+        """Spustí Holderův 1D algoritmus.
+
+        Args:
+            H: Parametr Holderovy konstanty (-1 globální odhad, -2 lokální odhad, jinak analyticky spočítaná hodnota).
+            I: Strategie výběru intervalu (1 nebo 2).
+            r: Spolehlivostní parametr algoritmu.
+            eps: Tolerance délky intervalu pro zastavení.
+            max_iter: Maximální počet iterací.
+            n: Řád iterace Hilbertovy křivky.
+            whatFunc: Volba optimalizované funkce (0=f, 1=f1_square, 2=f2_square).
+            true_min: Referenční globální minimum pro ftol kritérium.
+            ftol: Tolerance pro kritérium stop_condition='ftol'.
+            stop_condition: Typ zastavení ('eps' nebo 'ftol').
+
+        Returns:
+            N-tice (t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr).
+        """
         N = 2                      
         stop_condition = stop_condition.lower()
         if stop_condition not in {"eps", "ftol"}:
@@ -276,14 +379,14 @@ class Hilbert2D:
 
             # STEP 2: odhad Holderovy konstanty
             if H == -1:
-                h_used, h_value = self.HOLDER_CONST_1(xk, zk, N)
+                h_used= self.HOLDER_CONST_1(xk, zk, N)
             elif H == -2:
-                h_used, h_value = self.HOLDER_CONST_2(xk, zk, N)
+                h_used= self.HOLDER_CONST_2(xk, zk, N)
             else:
                 h_value = H
                 h_used = [h_value] * (len(xk) - 1)
 
-            usedH_arr.append(h_value)
+            
           
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
@@ -334,7 +437,7 @@ class Hilbert2D:
             z_new = self.F(y_star, n, whatFunc)
             zk.append(z_new)
             k += 1
-        
+            usedH_arr.append(h_used[0]) #délka tohoto pole = počet iterací
         min_idx = np.argmin(zk)
         t_min = xk[min_idx]               # parametr t na Hilbertově křivce
         x_min_mapped, y_min_mapped = self.hilbert_polygon_point(t_min,n)  # souřadnice v R^2
@@ -349,7 +452,16 @@ class Hilbert2D:
 
 
     def HOLDER_CONST_1(self, xk, zk, N):
-        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly."""
+        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly.
+
+        Args:
+            xk: Seznam dosud navštívených bodů v parametru t.
+            zk: Seznam hodnot funkce v bodech xk.
+            N: Dimenze původního prostoru (zde 2).
+
+        Returns:
+            Seznam h_used s globální konstantou.
+        """
         hvalues = []
         for i in range(1, len(xk)):
             diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
@@ -358,11 +470,20 @@ class Hilbert2D:
         h_hat = max(hvalues)
         h_value = max(h_hat, 1e-8)
         h_used = [h_value] * len(hvalues)
-        return h_used, h_value
+        return h_used
 
 
     def HOLDER_CONST_2(self, xk, zk, N):
-        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů."""
+        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů.
+
+        Args:
+            xk: Seznam dosud navštívených bodů v parametru t.
+            zk: Seznam hodnot funkce v bodech xk.
+            N: Dimenze původního prostoru (zde 2).
+
+        Returns:
+            Seznam h_values s lokálními odhady Holderovy konstanty.
+        """
         m_values = []
         for i in range(1, len(xk)):
             diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
@@ -397,18 +518,40 @@ class Hilbert2D:
                 h_i = max(lambda_values[i], xi_param)
             h_values.append(h_i)
 
-        h_value = max(h_values)
-        return h_values, h_value
-
+        
+        return h_values
 
     def SELECT_1(self, Mi, yi):
-        """Vybere interval s nejmenší hodnotou minorantu."""
+        """Vybere interval s nejmenší hodnotou charakteristiky.
+
+        Args:
+            Mi: Hodnoty charakteristik pro jednotlivé intervaly.
+            yi: Body pro dělení intervalů.
+
+        Returns:
+            Dvojice (idx, y_star) s indexem intervalu a novým bodem.
+        """
         idx = np.argmin(Mi)
         y_star = yi[idx]
         return idx, y_star
 
     def SELECT_2(self, Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new=None):
-        """Rozšířený výběr intervalu se střídáním stran kolem nejlepšího bodu."""
+        """Rozšířený výběr intervalu se střídáním stran kolem minima.
+
+        Args:
+            Mi: Hodnoty charakteristik pro jednotlivé intervaly.
+            yi: Body pro dělení intervalů.
+            xk: Seznam dosud navštívených bodů v parametru t.
+            zk: Seznam hodnot funkce v bodech xk.
+            flag: Přepínač režimu globálního/lokálního výběru.
+            imin: Index aktuálně nejlepšího bodu.
+            eps: Tolerance používaná při rozhodování o lokálním kroku.
+            side_flag: Přepínač strany pro střídání vlevo/vpravo.
+            z_new: Volitelná hodnota naposledy přidaného bodu.
+
+        Returns:
+            N-tice (idx, y_star, flag, imin, side_flag) po aktualizaci.
+        """
         idx = np.argmin(Mi)
         delta = eps*10
 

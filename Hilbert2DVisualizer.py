@@ -560,10 +560,10 @@ class Hilbert2DVisualizer:
         H=-1 vs H=-2 a I=1 vs I=2
         """
         variants = [
-            ("HOLDER-CONST(1), SELECT(1)", -1, 1),
-            ("HOLDER-CONST(1), SELECT(2)", -1, 2), 
-            ("HOLDER-CONST(2), SELECT(1)", -2, 1),
-            ("HOLDER-CONST(2), SELECT(2)", -2, 2)
+            ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
+            ("HOLDER-CONST(-1), SELECT(2)", -1, 2), 
+            ("HOLDER-CONST(-2), SELECT(1)", -2, 1),
+            ("HOLDER-CONST(-2), SELECT(2)", -2, 2)
         ]
         
         # Slovníky pro uložení výsledků
@@ -695,8 +695,8 @@ class Hilbert2DVisualizer:
             h2_iter = df_tol['H=-2_iter'].to_numpy()
             
             ax.plot(n_arr, h_exact_iter, 'o-', label=f'H přesné', linewidth=2, markersize=8)
-            ax.plot(n_arr, h1_iter, 's-', label='HOLDER-CONST(1)', linewidth=2, markersize=8)
-            ax.plot(n_arr, h2_iter, '^-', label='HOLDER-CONST(2)', linewidth=2, markersize=8)
+            ax.plot(n_arr, h1_iter, 's-', label='HOLDER-CONST(-1)', linewidth=2, markersize=8)
+            ax.plot(n_arr, h2_iter, '^-', label='HOLDER-CONST(-2)', linewidth=2, markersize=8)
             
             ax.set_xlabel('Řád Hilbertovy křivky (n)', fontsize=12)
             ax.set_ylabel('Počet iterací', fontsize=12)
@@ -722,8 +722,8 @@ class Hilbert2DVisualizer:
             h2_error = df_tol['H=-2_error'].to_numpy()
             
             ax.plot(n_arr, h_exact_error, 'o-', label='H přesné', linewidth=2, markersize=8)
-            ax.plot(n_arr, h1_error, 's-', label='HOLDER-CONST(1)', linewidth=2, markersize=8)
-            ax.plot(n_arr, h2_error, '^-', label='HOLDER-CONST(2)', linewidth=2, markersize=8)
+            ax.plot(n_arr, h1_error, 's-', label='HOLDER-CONST(-1)', linewidth=2, markersize=8)
+            ax.plot(n_arr, h2_error, '^-', label='HOLDER-CONST(-2)', linewidth=2, markersize=8)
             
             ax.set_xlabel('Řád Hilbertovy křivky (n)', fontsize=12)
             ax.set_ylabel('Chyba |f_min - true_min|', fontsize=12)
@@ -739,10 +739,10 @@ class Hilbert2DVisualizer:
     def compare_holder_variants_iterations(self, r, eps, max_iter, N_vals, whatFunc, true_min):
     
         variants = [
-            ("HOLDER-CONST(1), SELECT(1)", -1, 1),
-            ("HOLDER-CONST(1), SELECT(2)", -1, 2),
-            ("HOLDER-CONST(2), SELECT(1)", -2, 1),
-            ("HOLDER-CONST(2), SELECT(2)", -2, 2)
+            ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
+            ("HOLDER-CONST(-1), SELECT(2)", -1, 2),
+            ("HOLDER-CONST(-2), SELECT(1)", -2, 1),
+            ("HOLDER-CONST(-2), SELECT(2)", -2, 2)
         ]
 
         results = {name: [] for name, _, _ in variants}

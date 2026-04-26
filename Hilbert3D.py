@@ -8,6 +8,11 @@ import matplotlib.patches as patches
 class Hilbert3D:
     
     def __init__(self, precision: int):
+        """Inicializuje 3D Hilbertovu křivku a výchozí meze amplitudy.
+
+        Args:
+            precision: Počet oktálních číslic používaných v rozvoji parametru t.
+        """
         self.precision = precision
         self.heat_problem = None
         self.A_min = 1.0
@@ -23,7 +28,17 @@ class Hilbert3D:
         A_min=1.0,
         A_max=10.0,
     ):
-        """Nastavi 3D inverzni problem zdroje tepla pro whatFunc=2."""
+        """Nastaví inverzní úlohu zdroje tepla pro variantu whatFunc=2.
+
+        Args:
+            grid_size: Počet uzlů sítě v každém směru.
+            sigma: Šířka Gaussovského zdroje.
+            noise_level: Relativní velikost šumu v referenčních datech.
+            true_params: Skutečné parametry zdroje (x0, y0, A).
+            random_seed: Seed generátoru náhodných čísel.
+            A_min: Dolní mez amplitudy A při mapování ze z.
+            A_max: Horní mez amplitudy A při mapování ze z.
+        """
         import importlib
         import HeatSourceProblem
 
@@ -48,6 +63,14 @@ class Hilbert3D:
         self.A_max = float(A_max)
 
     def dec_to_octal(self, number: float):
+        """Převede číslo z intervalu [0,1] na oktální reprezentaci.
+
+        Args:
+            number: Vstupní hodnota t z intervalu [0,1].
+
+        Returns:
+            Seznam oktálních číslic délky precision.
+        """
         q_num = []
         i = 0
 
@@ -68,6 +91,14 @@ class Hilbert3D:
     
     
     def ThreeD_Hilbert(self, q_num):
+        """Vyhodnotí bod na 3D Hilbertově křivce pro zadané oktální číslice.
+
+        Args:
+            q_num: Seznam oktálních číslic.
+
+        Returns:
+            3D bod odpovídající zadané sekvenci číslic.
+        """
         H_all = [
             np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
             np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]]),
@@ -103,6 +134,15 @@ class Hilbert3D:
     
 
     def calculate_mainstream_point(self, q_num, n):
+        """Vypočítá bod mainstream iterace 3D Hilbertovy křivky.
+
+        Args:
+            q_num: Seznam oktálních číslic parametru t.
+            n: Řád aproximace.
+
+        Returns:
+            3D bod mainstream iterace.
+        """
         H = [
             np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]]),
             np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]]),
@@ -146,6 +186,14 @@ class Hilbert3D:
 
 
     def ThreeD_Hilbert_point(self, t):
+        """Vrátí bod 3D Hilbertovy křivky pro parametr t.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+
+        Returns:
+            3D bod na Hilbertově křivce.
+        """
         
         if t == 1.0:
             return np.array([0.0, 0.0, 1.0])
@@ -157,6 +205,15 @@ class Hilbert3D:
 
 
     def hilbert_polygon_point(self, t, n):
+        """Vrátí bod spojité aproximace 3D Hilbertovy křivky.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád polygonální aproximace.
+
+        Returns:
+            3D bod na iteraci křivky.
+        """
     
         N = 2**(3*n)
         
@@ -196,7 +253,16 @@ class Hilbert3D:
         return Hilbert3D.f1(u, v, w)
 
     def f2(self, x, y, z):
-        """Cenova funkce inverzni ulohy: J(x,y,A), kde A je mapovane ze z."""
+        """Vyhodnotí cenovou funkci inverzní úlohy J(x, y, A).
+
+        Args:
+            x: x-ová souřadnice středu zdroje.
+            y: y-ová souřadnice středu zdroje.
+            z: Namapovaný parametr amplitudy A.
+
+        Returns:
+            Hodnota cenové funkce inverzní úlohy.
+        """
         if self.heat_problem is None:
             self.configure_heat_problem()
 
@@ -209,6 +275,17 @@ class Hilbert3D:
         return self.f2(x, y, z)
 
     def evaluate_function(self, x, y, z, whatFunc=0):
+        """Vyhodnotí zvolenou optimalizační funkci podle přepínače whatFunc.
+
+        Args:
+            x: x-ová souřadnice bodu.
+            y: y-ová souřadnice bodu.
+            z: z-ová souřadnice bodu.
+            whatFunc: Volba funkce (0=f, 1=f1_cube, 2=f2_cube).
+
+        Returns:
+            Hodnota zvolené funkce.
+        """
         if whatFunc == 0:
             return self.f(x, y, z)
         elif whatFunc == 1:
@@ -218,19 +295,32 @@ class Hilbert3D:
         raise ValueError("whatFunc must be 0, 1 or 2.")
 
     def F(self, t, n, whatFunc=0):
+        """Vyhodnotí 1D složenou funkci.
+
+        Args:
+            t: Parametr křivky z intervalu [0,1].
+            n: Řád iterace Hilbertovy křivky.
+            whatFunc: Volba funkce (0=f, 1=f1_cube, 2=f2_cube).
+
+        Returns:
+            Hodnota zvolené funkce v daném bodě.
+        """
         x, y, z = self.hilbert_polygon_point(t,n)
         return self.evaluate_function(x, y, z, whatFunc)
    
-    # --- Zabudovana python metoda pro hledani minima ---
-   
-    def find_minimum(self, n, whatFunc=0):
-        result = minimize_scalar(lambda t: self.F(t, n, whatFunc), bounds=(0, 1), method='bounded')
-        t_min = result.x
-        h_min = self.hilbert_polygon_point(t_min,n)
-        f_min = self.evaluate_function(*h_min, whatFunc=whatFunc)
-        return t_min, h_min, f_min
 
     def differential_evolution_global(self, true_min=None, ftol=1e-6, maxiter=200, whatFunc=0):
+        """Najde globální minimum na [0,1]^3 metodou differential evolution.
+
+        Args:
+            true_min: Volitelná referenční minimální hodnota pro předčasné zastavení.
+            ftol: Tolerance pro kontrolu blízkosti k true_min.
+            maxiter: Maximální počet generací.
+            whatFunc: Volba optimalizované funkce (0, 1 nebo 2).
+
+        Returns:
+            N-tice (f_min, x_min, y_min, z_min, generations, nfev).
+        """
         if ftol <= 0:
             raise ValueError("ftol must be positive.")
 
@@ -265,13 +355,29 @@ class Hilbert3D:
         return f_min, x_min, y_min, z_min, generation_count[0], nfev
    
     
-    def Holder_algorithm(self, H, r, eps, max_iter, n, true_min=None, ftol=1e-6, stop_condition="eps", I=1, whatFunc=0, return_iterations=False):
-        """Spustí Holderův 1D algoritmus nad Hilbertovsky mapovanou funkcí."""
+    def Holder_algorithm(self, H, r, eps, max_iter, n, true_min=None, ftol=1e-6, stop_condition="eps", I=1, whatFunc=0):
+        """Spustí Holderův 1D algoritmus nad Hilbertovsky mapovanou funkcí.
+        
+        Args:
+            H: Parametr Holderovy konstanty (-1 globální odhad, -2 lokální odhad, jinak analyticky spočítaná hodnota).
+            r: Spolehlivostní parametr algoritmu.
+            eps: Tolerance délky intervalu pro zastavení.
+            max_iter: Maximální počet iterací.
+            n: Řád iterace Hilbertovy křivky.
+            true_min: Referenční minimální hodnota pro ftol kritérium.
+            ftol: Tolerance pro kritérium stop_condition='ftol'.
+            stop_condition: Typ zastavení ('eps' nebo 'ftol').
+            I: Strategie výběru intervalu (1 nebo 2).
+            whatFunc: Volba optimalizované funkce (0, 1 nebo 2).
+
+        Returns:
+            N-tice s minimem a souřadnicemi, i s počtem iterací.
+        """
         N = 3                      
         stop_condition = stop_condition.lower()
         if stop_condition not in {"eps", "ftol"}:
             raise ValueError("stop_condition must be either 'eps' or 'ftol'.")
-
+        return_iterations = True 
         # STEP 0: inicializace
         xk = [0.0, 1.0]
         zk = [self.F(0.0,n, whatFunc), self.F(1.0,n, whatFunc)]
@@ -292,14 +398,14 @@ class Hilbert3D:
 
             # STEP 2: odhad Holderovy konstanty
             if H == -1:
-                h_used, h_value = self.HOLDER_CONST_1(xk, zk, N)
+                h_used = self.HOLDER_CONST_1(xk, zk, N)
             elif H == -2:
-                h_used, h_value = self.HOLDER_CONST_2(xk, zk, N)
+                h_used = self.HOLDER_CONST_2(xk, zk, N)
             else:
                 h_value = H
                 h_used = [h_value] * (len(xk) - 1)
 
-            usedH_arr.append(h_value)
+            
           
             # STEP 3: vypocet pruseciku a M_i
             Mi = []
@@ -331,19 +437,27 @@ class Hilbert3D:
 
             xk.append(y_star)
             zk.append(self.F(y_star, n, whatFunc))
-
         min_idx = int(np.argmin(zk))
         t_min = xk[min_idx]
         x_min, y_min, z_min = self.hilbert_polygon_point(t_min, n)
         f_min = self.evaluate_function(x_min, y_min, z_min, whatFunc)
-
+       
         if return_iterations:
             return t_min, f_min, x_min, y_min, z_min, actual_iterations
         return t_min, f_min, x_min, y_min, z_min
 
 
     def HOLDER_CONST_1(self, xk, zk, N):
-        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly."""
+        """Spočítá globální odhad Holderovy konstanty pro všechny intervaly.
+
+        Args:
+            xk: Seznam dosud navštívených bodů v parametru t.
+            zk: Seznam hodnot složené funkce v bodech xk.
+            N: Dimenze původního prostoru (zde 3).
+
+        Returns:
+            Dvojice (h_used) s globální konstantou.
+        """
         hvalues = []
         for i in range(1, len(xk)):
             diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
@@ -352,11 +466,20 @@ class Hilbert3D:
         h_hat = max(hvalues)
         h_value = max(h_hat, 1e-8)
         h_used = [h_value] * len(hvalues)
-        return h_used, h_value
+        return h_used
 
 
     def HOLDER_CONST_2(self, xk, zk, N):
-        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů."""
+        """Spočítá lokální odhady Holderovy konstanty podle okolních intervalů.
+
+        Args:
+            xk: Seznam dosud navštívených bodů v parametru t.
+            zk: Seznam hodnot funkce v bodech xk.
+            N: Dimenze původního prostoru (zde 3).
+
+        Returns:
+            Seznam (h_values) s lokálními odhady Holderovy konstanty.
+        """
         m_values = []
         for i in range(1, len(xk)):
             diff = abs(zk[i] - zk[i-1]) / (abs(xk[i] - xk[i-1]))**(1/N) if abs(xk[i]-xk[i-1]) > 0 else 0
@@ -391,18 +514,41 @@ class Hilbert3D:
                 h_i = max(lambda_values[i], xi_param)
             h_values.append(h_i)
 
-        h_value = max(h_values)
-        return h_values, h_value
+       
+        return h_values
 
 
     def SELECT_1(self, Mi, yi):
-        """Vybere interval s nejmenší hodnotou minorantu."""
+        """Vybere interval s nejmenší hodnotou charakteristiky.
+
+        Args:
+            Mi: Hodnoty charakteristik pro jednotlivé intervaly.
+            yi: Kandidátní body pro dělení intervalů.
+
+        Returns:
+            Dvojice (idx, y_star) s indexem intervalu a novým bodem.
+        """
         idx = np.argmin(Mi)
         y_star = yi[idx]
         return idx, y_star
 
     def SELECT_2(self, Mi, yi, xk, zk, flag, imin, eps, side_flag, z_new=None):
-        """Rozšířený výběr intervalu se střídáním stran kolem nejlepšího bodu."""
+        """Rozšířený výběr intervalu se střídáním stran kolem minima.
+
+        Args:
+            Mi: Hodnoty charakteristik pro jednotlivé intervaly.
+            yi: Body pro dělení intervalů.
+            xk: Seznam dosud navštívených bodů.
+            zk: Seznam hodnot složené funkce v bodech xk.
+            flag: Přepínač režimu globálního/lokálního výběru.
+            imin: Index aktuálně nejlepšího bodu.
+            eps: Tolerance používaná při rozhodování o lokálním kroku.
+            side_flag: Přepínač strany pro střídání vlevo/vpravo.
+            z_new: Hodnota naposledy přidaného bodu.
+
+        Returns:
+            N-tice (idx, y_star, flag, imin, side_flag) po aktualizaci.
+        """
         idx = np.argmin(Mi)
         delta = eps*10
 

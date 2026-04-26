@@ -19,7 +19,6 @@ class Hilbert3DVisualizer:
             true_min=true_min,
             ftol=ftol,
             stop_condition=stop_condition,
-            return_iterations=True,
         )
 
     def _create_axis_with_3d_fallback(self, figsize=(6, 6)):
@@ -355,10 +354,10 @@ class Hilbert3DVisualizer:
 
     def compare_holder_variants(self, r, eps, max_iter, N_vals, whatFunc, true_min):
         variants = [
-            ("HOLDER-CONST(1), SELECT(1)", -1, 1),
-            ("HOLDER-CONST(1), SELECT(2)", -1, 2),
-            ("HOLDER-CONST(2), SELECT(1)", -2, 1),
-            ("HOLDER-CONST(2), SELECT(2)", -2, 2),
+            ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
+            ("HOLDER-CONST(-1), SELECT(2)", -1, 2),
+            ("HOLDER-CONST(-2), SELECT(1)", -2, 1),
+            ("HOLDER-CONST(-2), SELECT(2)", -2, 2),
         ]
 
         results = {name: [] for name, _, _ in variants}
@@ -446,8 +445,8 @@ class Hilbert3DVisualizer:
 
             n_arr = df_tol["n"].to_numpy()
             ax.plot(n_arr, df_tol["H_exact_iter"].to_numpy(), "o-", label="H presne", linewidth=2, markersize=8)
-            ax.plot(n_arr, df_tol["H=-1_iter"].to_numpy(), "s-", label="HOLDER-CONST(1)", linewidth=2, markersize=8)
-            ax.plot(n_arr, df_tol["H=-2_iter"].to_numpy(), "^-", label="HOLDER-CONST(2)", linewidth=2, markersize=8)
+            ax.plot(n_arr, df_tol["H=-1_iter"].to_numpy(), "s-", label="HOLDER-CONST(-1)", linewidth=2, markersize=8)
+            ax.plot(n_arr, df_tol["H=-2_iter"].to_numpy(), "^-", label="HOLDER-CONST(-2)", linewidth=2, markersize=8)
 
             ax.set_xlabel("Řád Hilbertovy křivky (n)", fontsize=12)
             ax.set_ylabel("Počet iterací", fontsize=12)
@@ -468,8 +467,8 @@ class Hilbert3DVisualizer:
 
             n_arr = df_tol["n"].to_numpy()
             ax.plot(n_arr, df_tol["H_exact_error"].to_numpy(), "o-", label="H presne", linewidth=2, markersize=8)
-            ax.plot(n_arr, df_tol["H=-1_error"].to_numpy(), "s-", label="HOLDER-CONST(1)", linewidth=2, markersize=8)
-            ax.plot(n_arr, df_tol["H=-2_error"].to_numpy(), "^-", label="HOLDER-CONST(2)", linewidth=2, markersize=8)
+            ax.plot(n_arr, df_tol["H=-1_error"].to_numpy(), "s-", label="HOLDER-CONST(-1)", linewidth=2, markersize=8)
+            ax.plot(n_arr, df_tol["H=-2_error"].to_numpy(), "^-", label="HOLDER-CONST(-2)", linewidth=2, markersize=8)
 
             ax.set_xlabel("Rad Hilbertovy krivky (n)", fontsize=12)
             ax.set_ylabel("Chyba |f_min - true_min|", fontsize=12)
@@ -484,10 +483,10 @@ class Hilbert3DVisualizer:
 
     def compare_holder_variants_iterations(self, r, eps, max_iter, N_vals, whatFunc, true_min):
         variants = [
-            ("HOLDER-CONST(1), SELECT(1)", -1, 1),
-            ("HOLDER-CONST(1), SELECT(2)", -1, 2),
-            ("HOLDER-CONST(2), SELECT(1)", -2, 1),
-            ("HOLDER-CONST(2), SELECT(2)", -2, 2),
+            ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
+            ("HOLDER-CONST(-1), SELECT(2)", -1, 2),
+            ("HOLDER-CONST(-2), SELECT(1)", -2, 1),
+            ("HOLDER-CONST(-2), SELECT(2)", -2, 2),
         ]
 
         results = {name: [] for name, _, _ in variants}
