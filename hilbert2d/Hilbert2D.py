@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from scipy.optimize import minimize_scalar, differential_evolution, OptimizeResult, minimize
+from scipy.optimize import differential_evolution
 from math import sqrt
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches

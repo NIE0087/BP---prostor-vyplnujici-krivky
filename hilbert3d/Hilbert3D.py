@@ -40,9 +40,12 @@ class Hilbert3D:
             A_max: Horní mez amplitudy A při mapování ze z.
         """
         import importlib
-        import HeatSourceProblem
+        try:
+            from . import HeatSourceProblem as HeatSourceProblemModule
+        except ImportError:
+            import HeatSourceProblem as HeatSourceProblemModule
 
-        HeatSourceProblem = importlib.reload(HeatSourceProblem)
+        HeatSourceProblem = importlib.reload(HeatSourceProblemModule)
 
         heat_cls = getattr(HeatSourceProblem, "HeatSourceInverseProblem3D", None)
         if heat_cls is None:
