@@ -33,7 +33,7 @@ class Hilbert2DVisualizer:
    
     
     def __init__(self, hilbert2d):
-     
+        """Inicializuje visualizátor s instancí Hilbertovy křivky."""
         self.hilbert = hilbert2d
     
 
@@ -52,6 +52,7 @@ class Hilbert2DVisualizer:
         true_point=None,
         print_table=True
     ):
+        """Spočítá tabulku výsledků Hölderova algoritmu pro různé řády Hilbertovy křivky."""
         if not n_values:
             raise ValueError("n_values nesmí být prázdné")
 
@@ -93,6 +94,7 @@ class Hilbert2DVisualizer:
         return df
 
     def holder_table_simple(self, n_values,whatFunc=0,H=-1,I=2,r=1.01,eps=1e-6, max_iter=1000, ftol=1e-6, true_min=1.0, true_point=(0.3, 0.7)):
+        """Zjednodušené volání compute_holder_table_values s defaultními parametry."""
         return self.compute_holder_table_values(
             n_values=n_values,
             whatFunc=whatFunc,
@@ -110,9 +112,7 @@ class Hilbert2DVisualizer:
 
     
     def compare_iteration_counts(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-2, I=2, r=3, eps=1e-6, max_iter_holder=1000):
-       
-
-        
+        """Porovná počet iterací Differential Evolution a Hölderova algoritmu."""
         results = {}
         
         # 1. Differential Evolution
@@ -167,11 +167,7 @@ class Hilbert2DVisualizer:
 
 
     def compare_iterations_by_curve_order(self, n_values, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-1, I=2, r=3, eps=1e-6, max_iter_holder=1000):
-     
-        import pandas as pd
-        
-    
-        
+        """Porovná iterace obou algoritmů pro různé řády Hilbertovy křivky a vytiskne tabulku."""
         all_results = {}
         
         for n in n_values:
@@ -419,11 +415,6 @@ class Hilbert2DVisualizer:
             print("Stopped by max_iter condition")
 
         return t_min, f_min, x_min_mapped, y_min_mapped, usedH_arr
-
-
-
-
-
 
 
 
@@ -869,29 +860,6 @@ class Hilbert2DVisualizer:
         return errors
 
 
-
-   
-
-
-
-    def analyze_holder_constants(self, H_true,I,H, r, eps, max_iter, N_vals, whatFunc):
-    
-        results = []
-        
-        for n in N_vals:
-            _, _, _, _, usedH_arr = self.hilbert.Holder_algorithm_mapped(H,I, r, eps, max_iter, n, whatFunc, true_min=None, ftol=eps)
-            
-            if usedH_arr:
-                h_final = usedH_arr[-1]
-                h_mean = np.mean(usedH_arr)
-                results.append([n, H_true, h_mean, h_final])
-            else:
-                results.append([n, H_true, 0, 0])
-        
-        df = pd.DataFrame(results, columns=["n", "H opravdové", "H průměr", "H finální"])
-        print(df)
-        
-        return df
 
 
 

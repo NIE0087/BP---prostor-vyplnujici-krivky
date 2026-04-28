@@ -109,9 +109,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def compare_iteration_counts(self, n, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-2, I=2, r=3, eps=1e-6, max_iter_holder=1000):
-       
 
-        
         results = {}
         
         # Differential Evolution
@@ -166,11 +164,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def compare_iterations_by_curve_order(self, n_values, x_min, x_max, y_min, y_max, whatFunc, true_min, ftol=1e-6, maxiter=1000, H=-1, I=2, r=3, eps=1e-6, max_iter_holder=1000):
-     
-        import pandas as pd
-        
     
-        
         all_results = {}
         
         for n in n_values:
