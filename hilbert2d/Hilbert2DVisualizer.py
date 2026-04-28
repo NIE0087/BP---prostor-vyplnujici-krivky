@@ -431,6 +431,7 @@ class Hilbert2DVisualizer:
 
 
     def plot_hilbert_polygon(self, n):
+        """Vykresli 2D Hilbertuv polygon pro zadany rad n."""
         
 
         N = 2**(2*n)
@@ -449,69 +450,70 @@ class Hilbert2DVisualizer:
 
 
     def plot_multiple_hilberts_arrows(self, orders):
+        """Vykresli vice Hilbertovych krivek s orientacnimi sipkami."""
 
-     fig, axes = plt.subplots(1, len(orders), figsize=(4*len(orders), 4))
+        fig, axes = plt.subplots(1, len(orders), figsize=(4*len(orders), 4))
 
-     if len(orders) == 1:
-        axes = [axes]
+        if len(orders) == 1:
+            axes = [axes]
 
-     for ax, n in zip(axes, orders):
-        
-        if n == 0:
-           
-            points = np.array([[0,0], [1,0]])
+        for ax, n in zip(axes, orders):
 
-        elif n == 1:
-           
-            points = np.array([
-                [0.0, 0.0],
-                [0.0, 0.5],
-                [0.5, 0.5],
-                [1.0, 0.5],
-                [1.0, 0.0]   
-                
-            ])
+            if n == 0:
 
-        else:
-            
-            points = []
-            for k in range(4 ** n+1):
-                t = k / (4 ** n)
-                p = self.hilbert.hilbert_polygon_point(t, n)
-                points.append(p)
-            points = np.array(points)
+                points = np.array([[0,0], [1,0]])
+
+            elif n == 1:
+
+                points = np.array([
+                    [0.0, 0.0],
+                    [0.0, 0.5],
+                    [0.5, 0.5],
+                    [1.0, 0.5],
+                    [1.0, 0.0]
+
+                ])
+
+            else:
+
+                points = []
+                for k in range(4 ** n+1):
+                    t = k / (4 ** n)
+                    p = self.hilbert.hilbert_polygon_point(t, n)
+                    points.append(p)
+                points = np.array(points)
 
 
-        ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
+            ax.plot(points[:, 0], points[:, 1], '-o', markersize=2)
 
-        #  šipky
-        for i in range(len(points)-1):
-            x0, y0 = points[i]
-            x1, y1 = points[i+1]
-            ax.annotate("",
-                        xy=(x1, y1), xytext=(x0, y0),
-                        arrowprops=dict(arrowstyle="->", color="black", lw=2))
+            #  šipky
+            for i in range(len(points)-1):
+                x0, y0 = points[i]
+                x1, y1 = points[i+1]
+                ax.annotate("",
+                            xy=(x1, y1), xytext=(x0, y0),
+                            arrowprops=dict(arrowstyle="->", color="black", lw=2))
 
-        # mřížka
-        step = 1 / (2**max(1,n))   
-        for i in range(2**max(1,n)+1):
-            for j in range(2**max(1,n)+1):
-                square = patches.Rectangle(
-                    (i*step, j*step), step, step,
-                    facecolor="white",
-                    edgecolor="black",
-                    linewidth=0.5
-                )
-                ax.add_patch(square)
+            # mřížka
+            step = 1 / (2**max(1,n))
+            for i in range(2**max(1,n)+1):
+                for j in range(2**max(1,n)+1):
+                    square = patches.Rectangle(
+                        (i*step, j*step), step, step,
+                        facecolor="white",
+                        edgecolor="black",
+                        linewidth=0.5
+                    )
+                    ax.add_patch(square)
 
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_aspect("equal")
-        ax.set_title(f"({n})")
-        ax.axis("on")
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.set_aspect("equal")
+            ax.set_title(f"({n})")
+            ax.axis("on")
 
-     plt.tight_layout()
-     plt.show()
+        plt.tight_layout()
+        plt.show()
 
 
 
@@ -520,6 +522,7 @@ class Hilbert2DVisualizer:
 
 
     def compare_algorithms(self, H, I, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min, stop_condition="eps"):
+        """Porovna Holderuv algoritmus a Differential Evolution v grafu chyb."""
      
         results = []
         
@@ -599,6 +602,7 @@ class Hilbert2DVisualizer:
 
 
     def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol=None, I=2):
+        """Spocita vysledky pro ruzne H aproximace a vykresli souhrnne grafy."""
        
         if isinstance(eps, (list, tuple, np.ndarray)):
             eps_list = list(eps)
@@ -737,6 +741,7 @@ class Hilbert2DVisualizer:
         plt.show()
 
     def compare_holder_variants_iterations(self, r, eps, max_iter, N_vals, whatFunc, true_min):
+        """Vykresli pocet iteraci ruznych variant Holderova algoritmu."""
     
         variants = [
             ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
@@ -823,44 +828,45 @@ class Hilbert2DVisualizer:
 
 
     def run_error_heatmap_round(self, H, I, r, max_iter, whatFunc, true_min):
+        """Vytvori heatmapu zaokrouhlene logaritmicke chyby pro n a eps."""
 
-     n_values = range(1, 21)
-     eps_values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
+        n_values = range(1, 21)
+        eps_values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
 
-     errors = np.zeros((len(eps_values), len(n_values)))
+        errors = np.zeros((len(eps_values), len(n_values)))
 
-     for i, eps in enumerate(eps_values):
-        for j, n in enumerate(n_values):
+        for i, eps in enumerate(eps_values):
+            for j, n in enumerate(n_values):
 
-            _, f_min, _, _, _ = self.hilbert.Holder_algorithm_mapped(
-                H=H,
-                I=I,
-                r=r,
-                eps=eps,
-                max_iter=max_iter,
-                n=n,
-                whatFunc=whatFunc,
-                true_min=true_min,
-                ftol=eps,
-            )
+                _, f_min, _, _, _ = self.hilbert.Holder_algorithm_mapped(
+                    H=H,
+                    I=I,
+                    r=r,
+                    eps=eps,
+                    max_iter=max_iter,
+                    n=n,
+                    whatFunc=whatFunc,
+                    true_min=true_min,
+                    ftol=eps,
+                )
 
-            err = abs(f_min - true_min)
-            errors[i, j] = np.floor(np.log10(max(err, 1e-16)))
+                err = abs(f_min - true_min)
+                errors[i, j] = np.floor(np.log10(max(err, 1e-16)))
 
-     plt.figure(figsize=(8,5))
-     plt.imshow(errors, origin="lower", aspect="auto", cmap="viridis")
+        plt.figure(figsize=(8,5))
+        plt.imshow(errors, origin="lower", aspect="auto", cmap="viridis")
 
-     plt.xticks(range(len(n_values)), n_values)
-     plt.yticks(range(len(eps_values)), [f"{e:.0e}" for e in eps_values])
+        plt.xticks(range(len(n_values)), n_values)
+        plt.yticks(range(len(eps_values)), [f"{e:.0e}" for e in eps_values])
 
-     plt.xlabel("Řád Hilbertovy křivky (n)")
-     plt.ylabel("eps")
-     plt.title("Heatmapa zaokrouhlené chyby")
-     plt.colorbar(label="log10(chyba)")
-     plt.tight_layout()
-     plt.show()
+        plt.xlabel("Řád Hilbertovy křivky (n)")
+        plt.ylabel("eps")
+        plt.title("Heatmapa zaokrouhlené chyby")
+        plt.colorbar(label="log10(chyba)")
+        plt.tight_layout()
+        plt.show()
 
-     return errors
+        return errors
 
 
 
@@ -894,6 +900,7 @@ class Hilbert2DVisualizer:
 
 
     def plot_holder_paraboloids(self, H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc, iteration_to_plot=0):
+        """Vykresli parabolicke majoranty Holderova kroku v zadane iteraci."""
     
         N = 2
         # STEP 0: inicializace
@@ -1008,6 +1015,7 @@ class Hilbert2DVisualizer:
     
     
     def _plot_paraboloids_at_iteration(self, xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
+        """Zobrazi 1D i 2D pohled na body a paraboloidy v konkretni iteraci."""
      
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         
@@ -1125,6 +1133,7 @@ class Hilbert2DVisualizer:
     def plot_function_with_hilbert_curve(self, func, n, x_range=(-1, 1), y_range=(-1, 1), 
                                          grid_points=50, curve_samples=1000, 
                                          title="Funkce s Hilbertovou křivkou"):
+        """Vykresli 3D povrch funkce a Hilbertovu krivku v zakladne grafu."""
    
         x_min, x_max = x_range
         y_min, y_max = y_range
@@ -1201,6 +1210,7 @@ class Hilbert2DVisualizer:
                                                      grid_points=50, curve_samples=1000,
                                                      title="Funkce s Hilbertovou křivkou a optimalizací",
                                                      true_min=None, ftol=1e-5):
+        """Vykresli povrch s Hilbertovou krivkou a vyznaci finalni bod optimalizace."""
         
         x_min, x_max = x_range
         y_min, y_max = y_range

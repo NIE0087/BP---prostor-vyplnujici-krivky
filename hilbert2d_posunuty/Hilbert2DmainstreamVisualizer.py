@@ -217,6 +217,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
         return all_results, df
     
     def plot_mainstream_hilbert_polygon(self, n):
+        """Vykresli mainstream 2D Hilbertuv polygon pro zadany rad n."""
         
 
         points = []
@@ -232,6 +233,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
     
     def plot_multiple_hilberts(self, orders):
+            """Vykresli vice mainstream Hilbertovych krivek vedle sebe."""
         
             fig, axes = plt.subplots(1, len(orders), figsize=(4*len(orders), 4))
 
@@ -276,6 +278,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol=None, I=2):
+        """Spocita vysledky pro ruzne H aproximace a vykresli souhrnne grafy."""
        
         if isinstance(eps, (list, tuple, np.ndarray)):
             eps_list = list(eps)
@@ -460,6 +463,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def compare_algorithms(self, H, I, r, eps, max_iter, N_vals, x_min, x_max, y_min, y_max, whatFunc, true_min):
+        """Porovna Holderuv algoritmus a scipy pristup v grafu chyb."""
      
         results = []
         
@@ -584,6 +588,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, whatFunc, true_min):
+        """Vykresli citlivost chyby na parametr r pro vice radu n."""
        
         results = {f"r={r}": [] for r in r_values}
         n_values = []
@@ -626,6 +631,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def plot_holder_paraboloids_mainstream(self, H, r, eps, max_iter, n, x_min, x_max, y_min, y_max, whatFunc, iteration_to_plot=0):
+        """Vykresli parabolicke majoranty Holderova kroku nad mainstream krivkou."""
     
         N = 2
         # STEP 0: inicializace
@@ -736,6 +742,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
 
 
     def _plot_paraboloids_at_iteration_mainstream(self, xk, zk, h_used, r, N, n, x_min, x_max, y_min, y_max, whatFunc, iteration):
+        """Zobrazi 1D i 2D pohled na body a paraboloidy v konkretni iteraci."""
      
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         
@@ -866,6 +873,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
     def plot_function_with_hilbert_curve(self, func, n, x_range=(-1, 1), y_range=(-1, 1), 
                                          grid_points=50, curve_samples=1000, 
                                          title="Funkce s Hilbertovou křivkou"):
+        """Vykresli 3D povrch funkce a mainstream Hilbertovu krivku v zakladne."""
        
         x_min, x_max = x_range
         y_min, y_max = y_range
@@ -940,6 +948,7 @@ class Hilbert2DmainstreamVisualizer(Hilbert2Dmainstream):
                                                      grid_points=50, curve_samples=1000,
                                                      title="Funkce s Hilbertovou křivkou a optimalizací",
                                                      true_min=None, ftol=1e-5):
+        """Vykresli povrch s mainstream krivkou a vyznaci finalni bod optimalizace."""
         
         x_min, x_max = x_range
         y_min, y_max = y_range

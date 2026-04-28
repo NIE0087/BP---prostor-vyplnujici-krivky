@@ -31,6 +31,7 @@ class Hilbert3DVisualizer:
             return fig, ax, False
 
     def _show_plotly_3d(self, pts, title, show_markers=False, show_labels=False, draw_grid=False, n=None):
+        """Vykresli 3D krivku v Plotly jako fallback pro prostredi bez mplot3d."""
         import plotly.graph_objects as go
 
         fig = go.Figure()
@@ -116,7 +117,7 @@ class Hilbert3DVisualizer:
         rows = []
         for n in n_values:
             _, f_min, x_min, y_min, z_min, holder_iters = self._run_holder(
-                H, I, r, eps, max_iter, n, whatFunc, true_min, ftol, stop_condition="ftol"
+                H, I, r, eps, max_iter, n, whatFunc, true_min, ftol, stop_condition="eps"
             )
 
             y_m = np.array([x_min, y_min, z_min], dtype=float)
@@ -312,6 +313,7 @@ class Hilbert3DVisualizer:
         z_min=None,
         z_max=None,
     ):
+        """Porovna Holderuv algoritmus a Differential Evolution v grafu chyb."""
         _ = (x_min, x_max, y_min, y_max, z_min, z_max)
 
         if true_min is None:
@@ -353,6 +355,7 @@ class Hilbert3DVisualizer:
         return df
 
     def compare_holder_variants(self, r, eps, max_iter, N_vals, whatFunc, true_min):
+        """Vykresli chybu ruznych variant Holderova algoritmu podle radu n."""
         variants = [
             ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
             ("HOLDER-CONST(-1), SELECT(2)", -1, 2),
@@ -388,6 +391,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def compare_H_approximations_iterations(self, H_exact, r, eps, max_iter, n_vals, whatFunc, true_min, ftol=None, I=2):
+        """Spocita vysledky pro ruzne H aproximace a vykresli souhrnne grafy."""
         eps_list = list(eps) if isinstance(eps, (list, tuple, np.ndarray)) else [eps]
 
         if ftol is None:
@@ -433,6 +437,7 @@ class Hilbert3DVisualizer:
         return df
 
     def _plot_H_comparison(self, df, eps_list):
+        """Vykresli porovnani iteraci a chyb pro zvolene H aproximace."""
         num_eps = len(eps_list)
 
         fig1, axes1 = plt.subplots(1, num_eps, figsize=(8 * num_eps, 6.5))
@@ -482,6 +487,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def compare_holder_variants_iterations(self, r, eps, max_iter, N_vals, whatFunc, true_min):
+        """Vykresli pocet iteraci ruznych variant Holderova algoritmu."""
         variants = [
             ("HOLDER-CONST(-1), SELECT(1)", -1, 1),
             ("HOLDER-CONST(-1), SELECT(2)", -1, 2),
@@ -516,6 +522,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def hyperparameter_tuning_r(self, r_values, H, I, eps, max_iter, N_vals, whatFunc, true_min, stop_condition="eps", ftol=None):
+        """Vykresli citlivost chyby na parametr r pro vice radu n."""
         results = {f"r={r}": [] for r in r_values}
         n_values = []
         ftol_used = eps if ftol is None else ftol
@@ -558,6 +565,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def plot_hilbert_polygon(self, n):
+        """Vykresli 3D Hilbertuv polygon pro zadany rad n."""
         N = 8 ** n
         pts = np.zeros((N, 3))
 
@@ -576,6 +584,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def plot_hilbert_curve(self, n):
+        """Vykresli 3D Hilbertovu krivku vytvorenou z oktalove reprezentace."""
         samples = 8 ** n
         pts = np.zeros((samples, 3))
 
@@ -595,6 +604,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def plot_mainstream_hilbert(self, n):
+        """Vykresli 3D mainstream variantu Hilbertovy krivky."""
         samples = 8 ** n
         pts = np.zeros((samples, 3))
 
@@ -614,6 +624,7 @@ class Hilbert3DVisualizer:
         plt.show()
 
     def plot_mainstream_hilbert_cubes(self, n):
+        """Vykresli mainstream 3D krivku, mrizku krychli a cislovani bodu."""
         samples = 8 ** n
         pts = np.zeros((samples, 3))
         for k in range(samples):
